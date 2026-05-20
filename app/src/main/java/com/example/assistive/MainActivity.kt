@@ -10,19 +10,31 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.example.assistive.ui.theme.AssistiveTheme
+import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
 
@@ -93,8 +105,22 @@ private val ALL_TOOLS = listOf(
     ToolItem("btn_notification", "Notification", false),
 )
 
-/** Maximum number of action buttons visible in the floating menu at once. */
 private const val MAX_ACTIVE_TOOLS = 7
+private const val PREF_ORDER_KEY   = "tool_order"
+
+/** Load tools in the user-saved order; any new tools are appended at the end. */
+private fun loadOrderedTools(prefs: android.content.SharedPreferences): List<ToolItem> {
+    val saved = prefs.getString(PREF_ORDER_KEY, null) ?: return ALL_TOOLS
+    val keys  = saved.split(",")
+    val ordered   = keys.mapNotNull { k -> ALL_TOOLS.find { it.key == k } }
+    val remainder = ALL_TOOLS.filter { t -> keys.none { it == t.key } }
+    return ordered + remainder
+}
+
+/** Persist the current order as a comma-separated key list. */
+private fun saveOrder(prefs: android.content.SharedPreferences, tools: List<ToolItem>) {
+    prefs.edit().putString(PREF_ORDER_KEY, tools.joinToString(",") { it.key }).apply()
+}
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
@@ -105,7 +131,10 @@ fun MainScreen(
     onStopClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("AssistivePrefs", Context.MODE_PRIVATE) }
+    val prefs   = remember { context.getSharedPreferences("AssistivePrefs", Context.MODE_PRIVATE) }
+
+    // Ordered list — drives both the UI and the floating menu
+    val orderedTools = remember { mutableStateListOf<ToolItem>().apply { addAll(loadOrderedTools(prefs)) } }
 
     val selectedMap = remember {
         mutableStateMapOf<String, Boolean>().apply {
@@ -116,79 +145,163 @@ fun MainScreen(
     }
 
     val activeCount = selectedMap.values.count { it }
-    val atLimit = activeCount >= MAX_ACTIVE_TOOLS
+    val atLimit     = activeCount >= MAX_ACTIVE_TOOLS
 
-    Box(
+    // Drag state
+    var draggedIndex  by remember { mutableStateOf<Int?>(null) }
+    var dragOffsetY   by remember { mutableStateOf(0f) }
+    val itemHeightPx  = with(LocalDensity.current) { 64.dp.toPx() }
+
+    Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 24.dp, vertical = 16.dp),
-        contentAlignment = Alignment.TopCenter
+            .padding(horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(0.dp),
-            modifier = Modifier.verticalScroll(rememberScrollState())
+        Spacer(Modifier.height(20.dp))
+
+        Text(
+            text = "Assistive Touch",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(Modifier.height(4.dp))
+
+        Text(
+            text = "Toggle and drag to reorder your menu buttons",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(Modifier.height(14.dp))
+
+        // Active count chip
+        Surface(
+            shape = RoundedCornerShape(50),
+            color = if (atLimit) MaterialTheme.colorScheme.errorContainer
+            else MaterialTheme.colorScheme.secondaryContainer
         ) {
-            Spacer(Modifier.height(16.dp))
-
             Text(
-                text = "Assistive Touch",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
+                text = "$activeCount / $MAX_ACTIVE_TOOLS active",
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                fontSize = 13.sp,
+                color = if (atLimit) MaterialTheme.colorScheme.onErrorContainer
+                else MaterialTheme.colorScheme.onSecondaryContainer,
+                fontWeight = FontWeight.Medium
             )
+        }
 
-            Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(16.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(4.dp))
 
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.DragHandle,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(Modifier.width(6.dp))
             Text(
-                text = "Choose up to $MAX_ACTIVE_TOOLS buttons to show in the menu",
-                style = MaterialTheme.typography.bodySmall,
+                text = "Long-press the drag handle to reorder",
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
 
-            Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(4.dp))
 
-            // ── Counter chip ─────────────────────────────────────────────
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                color = if (atLimit)
-                    MaterialTheme.colorScheme.errorContainer
-                else
-                    MaterialTheme.colorScheme.secondaryContainer
-            ) {
-                Text(
-                    text = "$activeCount / $MAX_ACTIVE_TOOLS active",
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                    fontSize = 13.sp,
-                    color = if (atLimit)
-                        MaterialTheme.colorScheme.onErrorContainer
-                    else
-                        MaterialTheme.colorScheme.onSecondaryContainer,
-                    fontWeight = FontWeight.Medium
+        // ── Draggable tool list ───────────────────────────────────────────
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            state = rememberLazyListState()
+        ) {
+            itemsIndexed(orderedTools, key = { _, t -> t.key }) { index, tool ->
+                val isDragging = draggedIndex == index
+
+                // Visual offset while this item is the dragged one
+                val visualOffsetY by animateDpAsState(
+                    targetValue = if (isDragging) with(LocalDensity.current) { dragOffsetY.toDp() } else 0.dp,
+                    label = "dragOffset"
                 )
-            }
 
-            Spacer(Modifier.height(20.dp))
+                val elevation by animateDpAsState(
+                    targetValue = if (isDragging) 8.dp else 0.dp,
+                    label = "elevation"
+                )
 
-            HorizontalDivider()
-
-            // ── Tool toggles ─────────────────────────────────────────────
-            ALL_TOOLS.forEach { tool ->
                 val isChecked = selectedMap[tool.key] ?: false
 
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .zIndex(if (isDragging) 1f else 0f)
+                        .offset(y = visualOffsetY)
+                        .shadow(elevation, RoundedCornerShape(8.dp))
+                        .background(
+                            color = if (isDragging) MaterialTheme.colorScheme.surfaceVariant
+                            else MaterialTheme.colorScheme.surface,
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
+                    // Drag handle
+                    Icon(
+                        imageVector = Icons.Default.DragHandle,
+                        contentDescription = "Drag to reorder",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .padding(start = 4.dp, end = 12.dp)
+                            .size(24.dp)
+                            .pointerInput(Unit) {
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = {
+                                        draggedIndex = index
+                                        dragOffsetY  = 0f
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        dragOffsetY += dragAmount.y
+
+                                        // Determine swap target
+                                        val rawTarget = index + (dragOffsetY / itemHeightPx).roundToInt()
+                                        val target    = rawTarget.coerceIn(0, orderedTools.lastIndex)
+
+                                        if (target != draggedIndex) {
+                                            val from = draggedIndex ?: return@detectDragGesturesAfterLongPress
+                                            orderedTools.add(target, orderedTools.removeAt(from))
+                                            dragOffsetY  -= (target - from) * itemHeightPx
+                                            draggedIndex  = target
+                                        }
+                                    },
+                                    onDragEnd = {
+                                        draggedIndex = null
+                                        dragOffsetY  = 0f
+                                        saveOrder(prefs, orderedTools)
+                                    },
+                                    onDragCancel = {
+                                        draggedIndex = null
+                                        dragOffsetY  = 0f
+                                    }
+                                )
+                            }
+                    )
+
                     Text(
                         text = tool.label,
-                        style = MaterialTheme.typography.bodyLarge
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f)
                     )
+
                     Switch(
                         checked = isChecked,
-                        // Grey-out un-checked switches when the limit is reached
                         enabled = isChecked || !atLimit,
                         onCheckedChange = { newVal ->
                             selectedMap[tool.key] = newVal
@@ -199,30 +312,24 @@ fun MainScreen(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
-
-            Spacer(Modifier.height(28.dp))
-
-            // ── Action buttons ────────────────────────────────────────────
-            Button(
-                onClick = onStartClick,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Start Floating Ball")
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            Button(
-                onClick = onStopClick,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFD32F2F)
-                ),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Close Service", color = Color.White)
-            }
-
-            Spacer(Modifier.height(24.dp))
         }
+
+        Spacer(Modifier.height(16.dp))
+
+        Button(onClick = onStartClick, modifier = Modifier.fillMaxWidth()) {
+            Text("Start Floating Ball")
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        Button(
+            onClick = onStopClick,
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Close Service", color = Color.White)
+        }
+
+        Spacer(Modifier.height(24.dp))
     }
 }
