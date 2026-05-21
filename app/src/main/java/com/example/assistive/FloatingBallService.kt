@@ -145,16 +145,48 @@ class FloatingBallService : AccessibilityService() {
 
     private fun showMenu() {
         val prefs = getSharedPreferences("AssistivePrefs", Context.MODE_PRIVATE)
-        val defaults = setOf("btn_home", "btn_back", "btn_recents")
-        val allKeys = listOf("btn_home","btn_back","btn_recents","btn_screenshot","btn_volume","btn_flashlight","btn_notification")
 
-        allKeys.forEach { idStr ->
-            val resId = resources.getIdentifier(idStr, "id", packageName)
-            if (resId != 0) {
-                val itemView = menuView.findViewById<View>(resId)
-                val isEnabled = prefs.getBoolean(idStr, idStr in defaults)
-                itemView?.visibility = if (isEnabled) View.VISIBLE else View.GONE
+        // 1. Target our flattened layout container
+        val menuGrid = menuView.findViewById<android.widget.GridLayout>(R.id.menu_grid)
+
+        // 2. Fetch the current saved button layout path string
+        val defaultOrder = "btn_home,btn_back,btn_recents,btn_screenshot,btn_volume,btn_flashlight,btn_notification"
+        val savedOrder = prefs.getString("tool_order", defaultOrder) ?: defaultOrder
+        val orderedKeys = savedOrder.split(",").filter { it.isNotEmpty() }
+
+        // Map your structural IDs to their extracted Layout view references
+        val buttonMap = mapOf(
+            "btn_home" to menuView.findViewById<View>(R.id.btn_home),
+            "btn_back" to menuView.findViewById<View>(R.id.btn_back),
+            "btn_recents" to menuView.findViewById<View>(R.id.btn_recents),
+            "btn_screenshot" to menuView.findViewById<View>(R.id.btn_screenshot),
+            "btn_volume" to menuView.findViewById<View>(R.id.btn_volume),
+            "btn_flashlight" to menuView.findViewById<View>(R.id.btn_flashlight),
+            "btn_notification" to menuView.findViewById<View>(R.id.btn_notification)
+        )
+        val btnClose = menuView.findViewById<View>(R.id.btn_close)
+        val defaults = setOf("btn_home", "btn_back", "btn_recents")
+
+        // 3. Detach all subviews safely before reconstructing layout sequences
+        menuGrid.removeAllViews()
+
+        // 4. Inject only active elements matching the ordered system configuration array
+        orderedKeys.forEach { key ->
+            val view = buttonMap[key]
+            val isEnabled = prefs.getBoolean(key, key in defaults)
+            if (view != null) {
+                if (isEnabled) {
+                    view.visibility = View.VISIBLE
+                    menuGrid.addView(view) // Append to grid container programmatically
+                } else {
+                    view.visibility = View.GONE
+                }
             }
+        }
+
+        // Always keep your Red Close button locked at the final grid position
+        if (btnClose != null) {
+            menuGrid.addView(btnClose)
         }
 
         safeRemoveBall()

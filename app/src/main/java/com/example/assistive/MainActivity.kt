@@ -176,7 +176,6 @@ fun MainScreen(
 
         Spacer(Modifier.height(14.dp))
 
-        // Active count chip
         Surface(
             shape = RoundedCornerShape(50),
             color = if (atLimit) MaterialTheme.colorScheme.errorContainer
@@ -221,14 +220,18 @@ fun MainScreen(
             modifier = Modifier.weight(1f),
             state = rememberLazyListState()
         ) {
-            itemsIndexed(orderedTools, key = { _, t -> t.key }) { index, tool ->
-                val isDragging = draggedIndex == index
+            itemsIndexed(orderedTools, key = { _, t -> t.key }) { _, tool ->
+                // Look up the live index dynamically to avoid closure-capture bugs
+                val currentLiveIndex = orderedTools.indexOf(tool)
+                val isDragging = draggedIndex == currentLiveIndex
 
-                // Visual offset while this item is the dragged one
-                val visualOffsetY by animateDpAsState(
-                    targetValue = if (isDragging) with(LocalDensity.current) { dragOffsetY.toDp() } else 0.dp,
-                    label = "dragOffset"
-                )
+                // FIX 2: Direct raw conversion during an active drag (no lag),
+                // but animate gracefully back to 0.dp when dropped.
+                val visualOffsetY = if (isDragging) {
+                    with(LocalDensity.current) { dragOffsetY.toDp() }
+                } else {
+                    animateDpAsState(targetValue = 0.dp, label = "dropReturnAnimation").value
+                }
 
                 val elevation by animateDpAsState(
                     targetValue = if (isDragging) 8.dp else 0.dp,
@@ -240,6 +243,7 @@ fun MainScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .animateItem() // Makes non-dragged items slide beautifully during swaps
                         .zIndex(if (isDragging) 1f else 0f)
                         .offset(y = visualOffsetY)
                         .shadow(elevation, RoundedCornerShape(8.dp))
@@ -260,25 +264,29 @@ fun MainScreen(
                         modifier = Modifier
                             .padding(start = 4.dp, end = 12.dp)
                             .size(24.dp)
-                            .pointerInput(Unit) {
+                            .pointerInput(Unit) { // Change from tool.key to Unit to keep gesture context alive
                                 detectDragGesturesAfterLongPress(
                                     onDragStart = {
-                                        draggedIndex = index
-                                        dragOffsetY  = 0f
+                                        val liveIdx = orderedTools.indexOf(tool)
+                                        if (liveIdx != -1) {
+                                            draggedIndex = liveIdx
+                                            dragOffsetY  = 0f
+                                        }
                                     },
                                     onDrag = { change, dragAmount ->
                                         change.consume()
                                         dragOffsetY += dragAmount.y
 
-                                        // Determine swap target
-                                        val rawTarget = index + (dragOffsetY / itemHeightPx).roundToInt()
-                                        val target    = rawTarget.coerceIn(0, orderedTools.lastIndex)
+                                        val liveIdx = draggedIndex ?: return@detectDragGesturesAfterLongPress
+                                        if (liveIdx != -1) {
+                                            val rawTarget = liveIdx + (dragOffsetY / itemHeightPx).roundToInt()
+                                            val target    = rawTarget.coerceIn(0, orderedTools.lastIndex)
 
-                                        if (target != draggedIndex) {
-                                            val from = draggedIndex ?: return@detectDragGesturesAfterLongPress
-                                            orderedTools.add(target, orderedTools.removeAt(from))
-                                            dragOffsetY  -= (target - from) * itemHeightPx
-                                            draggedIndex  = target
+                                            if (target != liveIdx) {
+                                                orderedTools.add(target, orderedTools.removeAt(liveIdx))
+                                                dragOffsetY -= (target - liveIdx) * itemHeightPx
+                                                draggedIndex = target
+                                            }
                                         }
                                     },
                                     onDragEnd = {
