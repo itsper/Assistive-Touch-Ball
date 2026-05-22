@@ -6,22 +6,23 @@
     android:layout_height="match_parent"
     android:columnCount="2"
     android:rowCount="3"
-    android:padding="4dp">
+    android:padding="2dp">
 
+    <!-- HOME -->
     <LinearLayout
         android:id="@+id/btn_home"
-        android:layout_width="110dp"
-        android:layout_height="72dp"
+        android:layout_width="90dp"
+        android:layout_height="60dp"
         android:orientation="vertical"
         android:gravity="center"
         android:background="@drawable/btn_item_bg"
         android:clickable="true"
         android:focusable="true"
-        android:layout_margin="5dp"
+        android:layout_margin="4dp"
         android:visibility="gone">
         <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:src="@drawable/ic_home"
             android:tint="#FFFFFFFF"/>
         <TextView
@@ -30,24 +31,25 @@
             android:text="Home"
             android:textColor="#FFFFFFFF"
             android:textSize="10sp"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="2dp"
             android:fontFamily="sans-serif-medium"/>
     </LinearLayout>
 
+    <!-- BACK -->
     <LinearLayout
         android:id="@+id/btn_back"
-        android:layout_width="110dp"
-        android:layout_height="72dp"
+        android:layout_width="90dp"
+        android:layout_height="60dp"
         android:orientation="vertical"
         android:gravity="center"
         android:background="@drawable/btn_item_bg"
         android:clickable="true"
         android:focusable="true"
-        android:layout_margin="5dp"
+        android:layout_margin="4dp"
         android:visibility="gone">
         <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:src="@drawable/ic_back"
             android:tint="#FFFFFFFF"/>
         <TextView
@@ -56,24 +58,25 @@
             android:text="Back"
             android:textColor="#FFFFFFFF"
             android:textSize="10sp"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="2dp"
             android:fontFamily="sans-serif-medium"/>
     </LinearLayout>
 
+    <!-- RECENTS -->
     <LinearLayout
         android:id="@+id/btn_recents"
-        android:layout_width="110dp"
-        android:layout_height="72dp"
+        android:layout_width="90dp"
+        android:layout_height="60dp"
         android:orientation="vertical"
         android:gravity="center"
         android:background="@drawable/btn_item_bg"
         android:clickable="true"
         android:focusable="true"
-        android:layout_margin="5dp"
+        android:layout_margin="4dp"
         android:visibility="gone">
         <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:src="@drawable/ic_recents"
             android:tint="#FFFFFFFF"/>
         <TextView
@@ -82,24 +85,25 @@
             android:text="Recents"
             android:textColor="#FFFFFFFF"
             android:textSize="10sp"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="2dp"
             android:fontFamily="sans-serif-medium"/>
     </LinearLayout>
 
+    <!-- SCREENSHOT -->
     <LinearLayout
         android:id="@+id/btn_screenshot"
-        android:layout_width="110dp"
-        android:layout_height="72dp"
+        android:layout_width="90dp"
+        android:layout_height="60dp"
         android:orientation="vertical"
         android:gravity="center"
         android:background="@drawable/btn_item_bg"
         android:clickable="true"
         android:focusable="true"
-        android:layout_margin="5dp"
+        android:layout_margin="4dp"
         android:visibility="gone">
         <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:src="@drawable/ic_screenshot"
             android:tint="#FFFFFFFF"/>
         <TextView
@@ -108,24 +112,25 @@
             android:text="Screenshot"
             android:textColor="#FFFFFFFF"
             android:textSize="10sp"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="2dp"
             android:fontFamily="sans-serif-medium"/>
     </LinearLayout>
 
+    <!-- VOLUME -->
     <LinearLayout
         android:id="@+id/btn_volume"
-        android:layout_width="110dp"
-        android:layout_height="72dp"
+        android:layout_width="90dp"
+        android:layout_height="60dp"
         android:orientation="vertical"
         android:gravity="center"
         android:background="@drawable/btn_item_bg"
         android:clickable="true"
         android:focusable="true"
-        android:layout_margin="5dp"
+        android:layout_margin="4dp"
         android:visibility="gone">
         <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:src="@drawable/ic_volume"
             android:tint="#FFFFFFFF"/>
         <TextView
@@ -134,24 +139,25 @@
             android:text="Volume"
             android:textColor="#FFFFFFFF"
             android:textSize="10sp"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="2dp"
             android:fontFamily="sans-serif-medium"/>
     </LinearLayout>
 
+    <!-- FLASHLIGHT -->
     <LinearLayout
         android:id="@+id/btn_flashlight"
-        android:layout_width="110dp"
-        android:layout_height="72dp"
+        android:layout_width="90dp"
+        android:layout_height="60dp"
         android:orientation="vertical"
         android:gravity="center"
         android:background="@drawable/btn_item_bg"
         android:clickable="true"
         android:focusable="true"
-        android:layout_margin="5dp"
+        android:layout_margin="4dp"
         android:visibility="gone">
         <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:src="@drawable/ic_flashlight"
             android:tint="#FFFFFFFF"/>
         <TextView
@@ -160,24 +166,25 @@
             android:text="Flashlight"
             android:textColor="#FFFFFFFF"
             android:textSize="10sp"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="2dp"
             android:fontFamily="sans-serif-medium"/>
     </LinearLayout>
 
+    <!-- NOTIFICATION -->
     <LinearLayout
         android:id="@+id/btn_notification"
-        android:layout_width="110dp"
-        android:layout_height="72dp"
+        android:layout_width="90dp"
+        android:layout_height="60dp"
         android:orientation="vertical"
         android:gravity="center"
         android:background="@drawable/btn_item_bg"
         android:clickable="true"
         android:focusable="true"
-        android:layout_margin="5dp"
+        android:layout_margin="4dp"
         android:visibility="gone">
         <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:src="@drawable/ic_notification"
             android:tint="#FFFFFFFF"/>
         <TextView
@@ -186,24 +193,25 @@
             android:text="Notification"
             android:textColor="#FFFFFFFF"
             android:textSize="10sp"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="2dp"
             android:fontFamily="sans-serif-medium"/>
     </LinearLayout>
 
+    <!-- BRIGHTNESS -->
     <LinearLayout
         android:id="@+id/btn_brightness"
-        android:layout_width="110dp"
-        android:layout_height="72dp"
+        android:layout_width="90dp"
+        android:layout_height="60dp"
         android:orientation="vertical"
         android:gravity="center"
         android:background="@drawable/btn_item_bg"
         android:clickable="true"
         android:focusable="true"
-        android:layout_margin="5dp"
+        android:layout_margin="4dp"
         android:visibility="gone">
         <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:src="@drawable/ic_menu_compass"
             android:tint="#FFFFFFFF"/>
         <TextView
@@ -212,24 +220,25 @@
             android:text="Brightness"
             android:textColor="#FFFFFFFF"
             android:textSize="10sp"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="2dp"
             android:fontFamily="sans-serif-medium"/>
     </LinearLayout>
 
+    <!-- AUTO-ROTATE -->
     <LinearLayout
         android:id="@+id/btn_rotate"
-        android:layout_width="110dp"
-        android:layout_height="72dp"
+        android:layout_width="90dp"
+        android:layout_height="60dp"
         android:orientation="vertical"
         android:gravity="center"
         android:background="@drawable/btn_item_bg"
         android:clickable="true"
         android:focusable="true"
-        android:layout_margin="5dp"
+        android:layout_margin="4dp"
         android:visibility="gone">
         <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:src="@drawable/ic_menu_always_landscape_portrait"
             android:tint="#FFFFFFFF"/>
         <TextView
@@ -238,24 +247,25 @@
             android:text="Auto-Rotate"
             android:textColor="#FFFFFFFF"
             android:textSize="10sp"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="2dp"
             android:fontFamily="sans-serif-medium"/>
     </LinearLayout>
 
+    <!-- WI-FI -->
     <LinearLayout
         android:id="@+id/btn_wifi"
-        android:layout_width="110dp"
-        android:layout_height="72dp"
+        android:layout_width="90dp"
+        android:layout_height="60dp"
         android:orientation="vertical"
         android:gravity="center"
         android:background="@drawable/btn_item_bg"
         android:clickable="true"
         android:focusable="true"
-        android:layout_margin="5dp"
+        android:layout_margin="4dp"
         android:visibility="gone">
         <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:src="@drawable/presence_offline"
             android:tint="#FFFFFFFF"/>
         <TextView
@@ -264,24 +274,25 @@
             android:text="Wi-Fi"
             android:textColor="#FFFFFFFF"
             android:textSize="10sp"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="2dp"
             android:fontFamily="sans-serif-medium"/>
     </LinearLayout>
 
+    <!-- MOBILE DATA -->
     <LinearLayout
         android:id="@+id/btn_data"
-        android:layout_width="110dp"
-        android:layout_height="72dp"
+        android:layout_width="90dp"
+        android:layout_height="60dp"
         android:orientation="vertical"
         android:gravity="center"
         android:background="@drawable/btn_item_bg"
         android:clickable="true"
         android:focusable="true"
-        android:layout_margin="5dp"
+        android:layout_margin="4dp"
         android:visibility="gone">
         <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:src="@drawable/ic_menu_share"
             android:tint="#FFFFFFFF"/>
         <TextView
@@ -290,24 +301,25 @@
             android:text="Mobile Data"
             android:textColor="#FFFFFFFF"
             android:textSize="10sp"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="2dp"
             android:fontFamily="sans-serif-medium"/>
     </LinearLayout>
 
+    <!-- CLOSE -->
     <LinearLayout
         android:id="@+id/btn_close"
-        android:layout_width="110dp"
-        android:layout_height="72dp"
+        android:layout_width="90dp"
+        android:layout_height="60dp"
         android:orientation="vertical"
         android:gravity="center"
         android:background="@drawable/btn_item_bg"
         android:clickable="true"
         android:focusable="true"
-        android:layout_margin="5dp"
+        android:layout_margin="4dp"
         android:visibility="gone">
         <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:src="@drawable/ic_close"
             android:tint="#FFEF5350"/>
         <TextView
@@ -316,7 +328,7 @@
             android:text="Close"
             android:textColor="#FFEF5350"
             android:textSize="10sp"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="2dp"
             android:fontFamily="sans-serif-medium"/>
     </LinearLayout>
 

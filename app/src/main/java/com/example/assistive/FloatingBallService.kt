@@ -109,7 +109,8 @@ class FloatingBallService : AccessibilityService() {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.CENTER
+            // Change from Gravity.CENTER to this:
+            gravity = Gravity.TOP or Gravity.START
         }
 
         setupMenuButtons()
@@ -227,6 +228,34 @@ class FloatingBallService : AccessibilityService() {
         // Force reset back to page 1 upon opening
         viewPager.setCurrentItem(0, false)
 
+        val displayMetrics = resources.displayMetrics
+        val screenWidth  = displayMetrics.widthPixels
+        val screenHeight = displayMetrics.heightPixels
+        val density      = displayMetrics.density
+
+        val menuWidthPx  = (220 * density).toInt()
+        val menuHeightPx = (234 * density).toInt()
+        val ballSizePx   = (60  * density).toInt()
+        val edgePadPx    = (8   * density).toInt()
+
+// Determine which side the ball is on by its center point
+        val ballCenterX = ballParams.x + ballSizePx / 2
+        val isOnLeftSide = ballCenterX < screenWidth / 2
+
+// Snap menu firmly to that screen edge — never floats in the middle
+        val targetX = if (isOnLeftSide) {
+            edgePadPx                                    // Hug left edge
+        } else {
+            screenWidth - menuWidthPx - edgePadPx        // Hug right edge
+        }
+
+// Vertically center the menu with the ball, clamped within screen bounds
+        var targetY = ballParams.y - (menuHeightPx / 2) + (ballSizePx / 2)
+        targetY = targetY.coerceIn(edgePadPx, screenHeight - menuHeightPx - edgePadPx)
+
+        menuParams.x = targetX
+        menuParams.y = targetY
+
         safeRemoveBall()
         addMenuView()
     }
@@ -324,12 +353,23 @@ class FloatingBallService : AccessibilityService() {
             val channel = NotificationChannel(channelId, "Assistive Touch", NotificationManager.IMPORTANCE_LOW)
             (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
         }
+
         val notification: Notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Assistive Ball Active")
             .setContentText("Running overlay controls")
             .setSmallIcon(android.R.drawable.ic_menu_compass)
             .build()
-        startForeground(1, notification)
+
+        // Pass the service type flags if running on Android 14+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                1,
+                notification,
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            )
+        } else {
+            startForeground(1, notification)
+        }
     }
 
     // ─── Inner ViewPager2 Adapter ────────────────────────────────────────────
@@ -349,9 +389,9 @@ class FloatingBallService : AccessibilityService() {
         override fun onBindViewHolder(holder: PageViewHolder, position: Int) {
             holder.gridLayout.removeAllViews()
             val density = holder.itemView.resources.displayMetrics.density
-            val widthPx = (110 * density).toInt()
-            val heightPx = (72 * density).toInt()
-            val marginPx = (5 * density).toInt()
+            val widthPx = (90 * density).toInt()   // Matches new layout layout_width
+            val heightPx = (60 * density).toInt()  // Matches new layout layout_height
+            val marginPx = (4 * density).toInt()   // Matches new layout layout_margin
 
             pages[position].forEach { view ->
                 // Clean views safety check

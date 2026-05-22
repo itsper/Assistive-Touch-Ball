@@ -62,7 +62,6 @@ class MainActivity : ComponentActivity() {
                 val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
                 startActivityForResult(intent, OVERLAY_PERMISSION_REQ_CODE)
             } else if (!Settings.System.canWrite(this)) {
-                // Request permission to change brightness/rotation
                 val intent = Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:$packageName"))
                 startActivity(intent)
                 Toast.makeText(this, "Grant Write Settings permission first", Toast.LENGTH_LONG).show()
@@ -97,24 +96,23 @@ data class ToolItem(
     val enabledByDefault: Boolean
 )
 
+// 🔥 FIX 1: All tools set to true by default
 private val ALL_TOOLS = listOf(
     ToolItem("btn_home",         "Home",         true),
     ToolItem("btn_back",         "Back",         true),
     ToolItem("btn_recents",      "Recents",      true),
-    ToolItem("btn_screenshot",   "Screenshot",   false),
-    ToolItem("btn_volume",       "Volume",       false),
-    ToolItem("btn_flashlight",   "Flashlight",   false),
-    ToolItem("btn_notification", "Notification", false),
-    ToolItem("btn_brightness",   "Brightness",   false),
-    ToolItem("btn_rotate",       "Auto-Rotate",  false),
-    ToolItem("btn_wifi",         "Wi-Fi",        false),
-    ToolItem("btn_data",         "Mobile Data",  false)
+    ToolItem("btn_screenshot",   "Screenshot",   true),
+    ToolItem("btn_volume",       "Volume",       true),
+    ToolItem("btn_flashlight",   "Flashlight",   true),
+    ToolItem("btn_notification", "Notification", true),
+    ToolItem("btn_brightness",   "Brightness",   true),
+    ToolItem("btn_rotate",       "Auto-Rotate",  true),
+    ToolItem("btn_wifi",         "Wi-Fi",        true),
+    ToolItem("btn_data",         "Mobile Data",  true)
 )
 
-private const val MAX_ACTIVE_TOOLS = 7
 private const val PREF_ORDER_KEY   = "tool_order"
 
-/** Load tools in the user-saved order; any new tools are appended at the end. */
 private fun loadOrderedTools(prefs: android.content.SharedPreferences): List<ToolItem> {
     val saved = prefs.getString(PREF_ORDER_KEY, null) ?: return ALL_TOOLS
     val keys  = saved.split(",")
@@ -123,7 +121,6 @@ private fun loadOrderedTools(prefs: android.content.SharedPreferences): List<Too
     return ordered + remainder
 }
 
-/** Persist the current order as a comma-separated key list. */
 private fun saveOrder(prefs: android.content.SharedPreferences, tools: List<ToolItem>) {
     prefs.edit().putString(PREF_ORDER_KEY, tools.joinToString(",") { it.key }).apply()
 }
@@ -139,7 +136,6 @@ fun MainScreen(
     val context = LocalContext.current
     val prefs   = remember { context.getSharedPreferences("AssistivePrefs", Context.MODE_PRIVATE) }
 
-    // Ordered list — drives both the UI and the floating menu
     val orderedTools = remember { mutableStateListOf<ToolItem>().apply { addAll(loadOrderedTools(prefs)) } }
 
     val selectedMap = remember {
@@ -151,9 +147,7 @@ fun MainScreen(
     }
 
     val activeCount = selectedMap.values.count { it }
-    val atLimit     = activeCount >= MAX_ACTIVE_TOOLS
 
-    // Drag state
     var draggedIndex  by remember { mutableStateOf<Int?>(null) }
     var dragOffsetY   by remember { mutableStateOf(0f) }
     val itemHeightPx  = with(LocalDensity.current) { 64.dp.toPx() }
@@ -182,17 +176,16 @@ fun MainScreen(
 
         Spacer(Modifier.height(14.dp))
 
+        // 🔥 FIX 2: Updated counter badge to reflect all items available dynamically
         Surface(
             shape = RoundedCornerShape(50),
-            color = if (atLimit) MaterialTheme.colorScheme.errorContainer
-            else MaterialTheme.colorScheme.secondaryContainer
+            color = MaterialTheme.colorScheme.secondaryContainer
         ) {
             Text(
-                text = "$activeCount / $MAX_ACTIVE_TOOLS active",
+                text = "$activeCount / ${ALL_TOOLS.size} active",
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
                 fontSize = 13.sp,
-                color = if (atLimit) MaterialTheme.colorScheme.onErrorContainer
-                else MaterialTheme.colorScheme.onSecondaryContainer,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
                 fontWeight = FontWeight.Medium
             )
         }
@@ -221,18 +214,14 @@ fun MainScreen(
 
         Spacer(Modifier.height(4.dp))
 
-        // ── Draggable tool list ───────────────────────────────────────────
         LazyColumn(
             modifier = Modifier.weight(1f),
             state = rememberLazyListState()
         ) {
             itemsIndexed(orderedTools, key = { _, t -> t.key }) { _, tool ->
-                // Look up the live index dynamically to avoid closure-capture bugs
                 val currentLiveIndex = orderedTools.indexOf(tool)
                 val isDragging = draggedIndex == currentLiveIndex
 
-                // FIX 2: Direct raw conversion during an active drag (no lag),
-                // but animate gracefully back to 0.dp when dropped.
                 val visualOffsetY = if (isDragging) {
                     with(LocalDensity.current) { dragOffsetY.toDp() }
                 } else {
@@ -249,7 +238,7 @@ fun MainScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .animateItem() // Makes non-dragged items slide beautifully during swaps
+                        .animateItem()
                         .zIndex(if (isDragging) 1f else 0f)
                         .offset(y = visualOffsetY)
                         .shadow(elevation, RoundedCornerShape(8.dp))
@@ -262,7 +251,6 @@ fun MainScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Drag handle
                     Icon(
                         imageVector = Icons.Default.DragHandle,
                         contentDescription = "Drag to reorder",
@@ -270,7 +258,7 @@ fun MainScreen(
                         modifier = Modifier
                             .padding(start = 4.dp, end = 12.dp)
                             .size(24.dp)
-                            .pointerInput(Unit) { // Change from tool.key to Unit to keep gesture context alive
+                            .pointerInput(Unit) {
                                 detectDragGesturesAfterLongPress(
                                     onDragStart = {
                                         val liveIdx = orderedTools.indexOf(tool)
@@ -314,9 +302,9 @@ fun MainScreen(
                         modifier = Modifier.weight(1f)
                     )
 
+                    // 🔥 FIX 3: Removed the 'enabled = isChecked || !atLimit' restriction
                     Switch(
                         checked = isChecked,
-                        enabled = isChecked || !atLimit,
                         onCheckedChange = { newVal ->
                             selectedMap[tool.key] = newVal
                             prefs.edit().putBoolean(tool.key, newVal).apply()

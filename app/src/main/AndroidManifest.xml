@@ -32,7 +32,8 @@
             android:name=".FloatingBallService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:exported="false"
-            android:enabled="true">
+            android:enabled="true"
+            android:foregroundServiceType="specialUse">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
             </intent-filter>
