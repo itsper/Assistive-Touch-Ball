@@ -1,221 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<GridLayout
+<LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/menu_grid"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
-    android:columnCount="2"
+    android:orientation="vertical"
     android:background="@drawable/floating_menu_bg"
     android:padding="12dp"
     android:elevation="16dp"
+    android:gravity="center_horizontal"
     android:minWidth="260dp">
 
-    <!-- HOME -->
-    <LinearLayout
-        android:id="@+id/btn_home"
-        android:layout_width="110dp"
-        android:layout_height="72dp"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:background="@drawable/btn_item_bg"
-        android:clickable="true"
-        android:focusable="true"
-        android:layout_margin="5dp">
-        <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:src="@drawable/ic_home"
-            android:tint="#FFFFFFFF"/>
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Home"
-            android:textColor="#FFFFFFFF"
-            android:textSize="10sp"
-            android:layout_marginTop="4dp"
-            android:fontFamily="sans-serif-medium"/>
-    </LinearLayout>
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/menu_viewpager"
+        android:layout_width="240dp"
+        android:layout_height="240dp" />
 
-    <!-- BACK -->
-    <LinearLayout
-        android:id="@+id/btn_back"
-        android:layout_width="110dp"
-        android:layout_height="72dp"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:background="@drawable/btn_item_bg"
-        android:clickable="true"
-        android:focusable="true"
-        android:layout_margin="5dp">
-        <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:src="@drawable/ic_back"
-            android:tint="#FFFFFFFF"/>
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Back"
-            android:textColor="#FFFFFFFF"
-            android:textSize="10sp"
-            android:layout_marginTop="4dp"
-            android:fontFamily="sans-serif-medium"/>
-    </LinearLayout>
-
-    <!-- RECENTS -->
-    <LinearLayout
-        android:id="@+id/btn_recents"
-        android:layout_width="110dp"
-        android:layout_height="72dp"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:background="@drawable/btn_item_bg"
-        android:clickable="true"
-        android:focusable="true"
-        android:layout_margin="5dp">
-        <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:src="@drawable/ic_recents"
-            android:tint="#FFFFFFFF"/>
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Recents"
-            android:textColor="#FFFFFFFF"
-            android:textSize="10sp"
-            android:layout_marginTop="4dp"
-            android:fontFamily="sans-serif-medium"/>
-    </LinearLayout>
-
-    <!-- SCREENSHOT -->
-    <LinearLayout
-        android:id="@+id/btn_screenshot"
-        android:layout_width="110dp"
-        android:layout_height="72dp"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:background="@drawable/btn_item_bg"
-        android:clickable="true"
-        android:focusable="true"
-        android:layout_margin="5dp">
-        <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:src="@drawable/ic_screenshot"
-            android:tint="#FFFFFFFF"/>
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Screenshot"
-            android:textColor="#FFFFFFFF"
-            android:textSize="10sp"
-            android:layout_marginTop="4dp"
-            android:fontFamily="sans-serif-medium"/>
-    </LinearLayout>
-
-    <!-- VOLUME -->
-    <LinearLayout
-        android:id="@+id/btn_volume"
-        android:layout_width="110dp"
-        android:layout_height="72dp"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:background="@drawable/btn_item_bg"
-        android:clickable="true"
-        android:focusable="true"
-        android:layout_margin="5dp">
-        <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:src="@drawable/ic_volume"
-            android:tint="#FFFFFFFF"/>
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Volume"
-            android:textColor="#FFFFFFFF"
-            android:textSize="10sp"
-            android:layout_marginTop="4dp"
-            android:fontFamily="sans-serif-medium"/>
-    </LinearLayout>
-
-    <!-- FLASHLIGHT -->
-    <LinearLayout
-        android:id="@+id/btn_flashlight"
-        android:layout_width="110dp"
-        android:layout_height="72dp"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:background="@drawable/btn_item_bg"
-        android:clickable="true"
-        android:focusable="true"
-        android:layout_margin="5dp">
-        <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:src="@drawable/ic_flashlight"
-            android:tint="#FFFFFFFF"/>
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Flashlight"
-            android:textColor="#FFFFFFFF"
-            android:textSize="10sp"
-            android:layout_marginTop="4dp"
-            android:fontFamily="sans-serif-medium"/>
-    </LinearLayout>
-
-    <!-- NOTIFICATION -->
-    <LinearLayout
-        android:id="@+id/btn_notification"
-        android:layout_width="110dp"
-        android:layout_height="72dp"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:background="@drawable/btn_item_bg"
-        android:clickable="true"
-        android:focusable="true"
-        android:layout_margin="5dp">
-        <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:src="@drawable/ic_notification"
-            android:tint="#FFFFFFFF"/>
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Notification"
-            android:textColor="#FFFFFFFF"
-            android:textSize="10sp"
-            android:layout_marginTop="4dp"
-            android:fontFamily="sans-serif-medium"/>
-    </LinearLayout>
-
-    <!-- CLOSE -->
-    <LinearLayout
-        android:id="@+id/btn_close"
-        android:layout_width="110dp"
-        android:layout_height="72dp"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:background="@drawable/btn_item_bg"
-        android:clickable="true"
-        android:focusable="true"
-        android:layout_margin="5dp">
-        <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:src="@drawable/ic_close"
-            android:tint="#FFEF5350"/>
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Close"
-            android:textColor="#FFEF5350"
-            android:textSize="10sp"
-            android:layout_marginTop="4dp"
-            android:fontFamily="sans-serif-medium"/>
-    </LinearLayout>
-
-</GridLayout>
+    <TextView
+        android:id="@+id/txt_page_indicator"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="1 / 2"
+        android:textColor="#88FFFFFF"
+        android:textSize="11sp"
+        android:layout_marginTop="4dp"
+        android:fontFamily="sans-serif-medium"/>
+</LinearLayout>

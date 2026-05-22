@@ -59,11 +59,13 @@ class MainActivity : ComponentActivity() {
     private fun checkAndStartService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (!Settings.canDrawOverlays(this)) {
-                val intent = Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:$packageName")
-                )
+                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
                 startActivityForResult(intent, OVERLAY_PERMISSION_REQ_CODE)
+            } else if (!Settings.System.canWrite(this)) {
+                // Request permission to change brightness/rotation
+                val intent = Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:$packageName"))
+                startActivity(intent)
+                Toast.makeText(this, "Grant Write Settings permission first", Toast.LENGTH_LONG).show()
             } else {
                 startFloatingService()
             }
@@ -103,6 +105,10 @@ private val ALL_TOOLS = listOf(
     ToolItem("btn_volume",       "Volume",       false),
     ToolItem("btn_flashlight",   "Flashlight",   false),
     ToolItem("btn_notification", "Notification", false),
+    ToolItem("btn_brightness",   "Brightness",   false),
+    ToolItem("btn_rotate",       "Auto-Rotate",  false),
+    ToolItem("btn_wifi",         "Wi-Fi",        false),
+    ToolItem("btn_data",         "Mobile Data",  false)
 )
 
 private const val MAX_ACTIVE_TOOLS = 7
