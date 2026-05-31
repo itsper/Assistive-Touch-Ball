@@ -42,9 +42,16 @@ class FloatingBallService : AccessibilityService() {
     private lateinit var actionMap: Map<Int, () -> Unit>
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == "ACTION_STOP_SERVICE") {
-            disableSelf()
-            return START_NOT_STICKY
+        when (intent?.action) {
+            "ACTION_STOP_SERVICE" -> {
+                disableSelf()
+                return START_NOT_STICKY
+            }
+            "ACTION_UPDATE_PREFS" -> {
+                if (isBallVisible) {
+                    applyLiveSettings()
+                }
+            }
         }
         return super.onStartCommand(intent, flags, startId)
     }
@@ -52,6 +59,7 @@ class FloatingBallService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
     override fun onInterrupt() {}
 
+    // 2. Make sure settings apply immediately when service connects
     override fun onServiceConnected() {
         super.onServiceConnected()
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -96,7 +104,38 @@ class FloatingBallService : AccessibilityService() {
 
         setupOutsideTouchDismiss()
         setupBallTouchListener()
+
+        // Apply settings right before adding the view to window manager
+        applyLiveSettings()
         addBallView()
+    }
+
+    // 3. Add this completely new method inside FloatingBallService class
+    private fun applyLiveSettings() {
+        val prefs = getSharedPreferences("AssistivePrefs", Context.MODE_PRIVATE)
+        val savedSizeDp = prefs.getFloat("ball_size", 60f)
+        val savedOpacity = prefs.getFloat("ball_opacity", 0.8f)
+
+        // Convert DP to Pixels dynamically based on device display density profile
+        val density = resources.displayMetrics.density
+        val sizeInPx = (savedSizeDp * density).toInt()
+
+        // Locate and modify dimensions on the inner view
+        val ballImage = ballView.findViewById<View>(R.id.ball_image)
+        if (ballImage != null) {
+            val layoutParams = ballImage.layoutParams
+            layoutParams.width = sizeInPx
+            layoutParams.height = sizeInPx
+            ballImage.layoutParams = layoutParams
+
+            // Apply transparency setting
+            ballImage.alpha = savedOpacity
+        }
+
+        // Force layout engine refresh update onto window hierarchy safely
+        if (isBallVisible) {
+            windowManager.updateViewLayout(ballView, ballParams)
+        }
     }
 
     override fun onDestroy() {

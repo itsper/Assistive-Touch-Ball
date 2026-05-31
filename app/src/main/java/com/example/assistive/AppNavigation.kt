@@ -102,14 +102,14 @@ fun AppNavigation(
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
-                // Determine active container context cleanly
+
                 when (currentScreen) {
                     ScreenDestination.DASHBOARD -> MainScreen(
                         onStartClick = { onStartClick() },
                         onStopClick = { onStopClick() }
                     )
-                    ScreenDestination.SETTINGS -> PlaceholderScreen(title = "Settings Configuration Panel")
-                    ScreenDestination.ABOUT -> PlaceholderScreen(title = "About Development Context")
+                    ScreenDestination.SETTINGS -> SettingsScreen() // Swapped placeholder out
+                    ScreenDestination.ABOUT -> AboutScreen()       // Swapped placeholder out
                 }
             }
         }
