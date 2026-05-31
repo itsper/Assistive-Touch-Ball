@@ -221,9 +221,9 @@ class FloatingBallService : AccessibilityService() {
         }
         map[R.id.btn_bluetooth] = {
             closeMenuThenDo(100L) {
-                startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                })
+                // Expand the system quick settings panel instantly
+                // This gives immediate access to the native Bluetooth toggle tile
+                performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)
             }
         }
         map[R.id.btn_airplane] = {
