@@ -1,127 +1,263 @@
 package com.example.assistive
 
 import android.content.Context
-import android.content.Intent // Added missing import to resolve the compilation errors
+import android.content.Intent
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Build
+import androidx.compose.material.icons.rounded.Opacity
+import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen() {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("AssistivePrefs", Context.MODE_PRIVATE) }
 
-    // Read stored preferences with sensible defaults
+    // Read stored preferences
     var startOnBoot by remember { mutableStateOf(prefs.getBoolean("start_on_boot", false)) }
     var ballSize by remember { mutableFloatStateOf(prefs.getFloat("ball_size", 60f)) }
     var transparency by remember { mutableFloatStateOf(prefs.getFloat("ball_opacity", 0.8f)) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFFF9F9F9))
-            .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
-    ) {
-        Text(
-            text = "Preferences",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF212121)
-        )
+    // Shared function to update the background service smoothly
+    val updateService = {
+        val intent = Intent(context, FloatingBallService::class.java).apply {
+            action = "ACTION_UPDATE_PREFS"
+        }
+        context.startService(intent)
+    }
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    Scaffold(
+        topBar = {
+            LargeTopAppBar(
+                title = {
+                    Text(
+                        text = "Preferences",
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.5).sp
+                    )
+                },
+                colors = TopAppBarDefaults.largeTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
+                )
+            )
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp)
-            ) {
-                // Boot Option Toggle
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(text = "Start on Device Boot", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-                        Text(text = "Launch background engine automatically", fontSize = 12.sp, color = Color.Gray)
+
+            // --- GENERAL SECTION ---
+            SettingSectionHeader(title = "General")
+
+            SettingCard {
+                SettingRow(
+                    icon = Icons.Rounded.PowerSettingsNew,
+                    title = "Start on Device Boot",
+                    description = "Launch background engine automatically",
+                    control = {
+                        Switch(
+                            checked = startOnBoot,
+                            onCheckedChange = { newValue ->
+                                startOnBoot = newValue
+                                prefs.edit().putBoolean("start_on_boot", newValue).apply()
+                            }
+                        )
                     }
-                    Switch(
-                        checked = startOnBoot,
-                        onCheckedChange = { newValue ->
-                            startOnBoot = newValue
-                            prefs.edit().putBoolean("start_on_boot", newValue).apply()
+                )
+            }
+
+            // --- APPEARANCE SECTION ---
+            SettingSectionHeader(title = "Appearance")
+
+            SettingCard {
+                Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
+
+                    // Slider 1: Ball Size
+                    SettingSliderRow(
+                        icon = Icons.Rounded.Build,
+                        title = "Floating Ball Size",
+                        valueLabel = "${ballSize.toInt()} dp",
+                        value = ballSize,
+                        valueRange = 40f..100f,
+                        onValueChange = { ballSize = it },
+                        onValueChangeFinished = {
+                            prefs.edit().putFloat("ball_size", ballSize).apply()
+                            updateService()
                         }
                     )
-                }
 
-                HorizontalDivider()
+                    HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
 
-                // Slider Row 1: Ball Size
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(text = "Floating Ball Size", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-                        Text(text = "${ballSize.toInt()} dp", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                    }
-                    Slider(
-                        value = ballSize,
-                        onValueChange = { newValue ->
-                            ballSize = newValue
-                            prefs.edit().putFloat("ball_size", newValue).apply()
-
-                            // Send a broadcast or signal to the running service to update dimensions live
-                            val intent = Intent(context, FloatingBallService::class.java).apply {
-                                action = "ACTION_UPDATE_PREFS"
-                            }
-                            context.startService(intent)
-                        },
-                        valueRange = 40f..100f
-                    )
-                }
-
-                HorizontalDivider()
-
-                // Slider Row 2: Opacity
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(text = "Idle Opacity", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-                        Text(text = "${(transparency * 100).toInt()}%", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                    }
-                    Slider(
+                    // Slider 2: Opacity
+                    SettingSliderRow(
+                        icon = Icons.Rounded.Opacity,
+                        title = "Idle Opacity",
+                        valueLabel = "${(transparency * 100).toInt()}%",
                         value = transparency,
-                        onValueChange = { newValue ->
-                            transparency = newValue
-                            prefs.edit().putFloat("ball_opacity", newValue).apply()
-
-                            // Send a broadcast or signal to the running service to update live
-                            val intent = Intent(context, FloatingBallService::class.java).apply {
-                                action = "ACTION_UPDATE_PREFS"
-                            }
-                            context.startService(intent)
-                        },
-                        valueRange = 0.2f..1.0f
+                        valueRange = 0.2f..1.0f,
+                        onValueChange = { transparency = it },
+                        onValueChangeFinished = {
+                            prefs.edit().putFloat("ball_opacity", transparency).apply()
+                            updateService()
+                        }
                     )
                 }
             }
         }
     }
 }
+
+// --- SUB-COMPONENTS FOR CLEANER ARCHITECTURE ---
+
+@Composable
+fun SettingSectionHeader(title: String) {
+    Text(
+        text = title,
+        fontSize = 14.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 4.dp, top = 8.getCustomPaddingIfNeeded())
+    )
+}
+
+@Composable
+fun SettingCard(content: @Composable () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp), // Sleeker, more modern rounded corners
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp) // Flat, tonal modern look
+    ) {
+        Box(modifier = Modifier.padding(20.dp)) {
+            content()
+        }
+    }
+}
+
+@Composable
+fun SettingRow(
+    icon: ImageVector,
+    title: String,
+    description: String,
+    control: @Composable () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                modifier = Modifier.size(40.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            Column {
+                Text(text = title, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                Text(text = description, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        control()
+    }
+}
+
+@Composable
+fun SettingSliderRow(
+    icon: ImageVector,
+    title: String,
+    valueLabel: String,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    onValueChange: (Float) -> Unit,
+    onValueChangeFinished: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+                Text(text = title, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+            }
+            Text(
+                text = valueLabel,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            onValueChangeFinished = onValueChangeFinished,
+            valueRange = valueRange,
+            modifier = Modifier.padding(horizontal = 4.dp)
+        )
+    }
+}
+
+// Inline helper for minor layout balancing
+private fun Int.getCustomPaddingIfNeeded(): androidx.compose.ui.unit.Dp = this.dp

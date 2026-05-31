@@ -2,6 +2,8 @@ package com.example.assistive
 
 import android.content.Context
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -14,11 +16,14 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -58,62 +63,93 @@ fun MainScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFFF9F9F9))
-            .padding(horizontal = 16.dp),
+            .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(20.dp))
+
+        // Instructional Subtitle
         Text(
             text = "Tap cards to toggle. Hold & drag to reorder your floating ball items.",
             style = MaterialTheme.typography.bodyMedium,
-            color = Color.Gray,
-            textAlign = TextAlign.Center
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            lineHeight = 20.sp
         )
-        Spacer(Modifier.height(12.dp))
-
-        Surface(
-            shape = RoundedCornerShape(50),
-            color = MaterialTheme.colorScheme.primaryContainer
-        ) {
-            Text(
-                text = "$activeCount / ${ALL_TOOLS.size} Active Items",
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
 
         Spacer(Modifier.height(16.dp))
 
+        // Active Status Pill
+        Surface(
+            shape = RoundedCornerShape(100),
+            color = MaterialTheme.colorScheme.primaryContainer,
+            tonalElevation = 2.dp
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.CheckCircle,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                )
+                Text(
+                    text = "$activeCount / ${ALL_TOOLS.size} Active Items",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+
+        // Reorderable Grid Component
         LazyVerticalGrid(
             columns = GridCells.Fixed(3),
             state = rememberLazyGridState(),
             modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             itemsIndexed(orderedTools, key = { _, t -> t.key }) { index, tool ->
                 val isEnabled = selectedMap[tool.key] ?: false
                 val isDragging = draggedIndex == index
-                val elevation by animateDpAsState(if (isDragging) 12.dp else 2.dp, label = "elevation")
+
+                // Physics-based spring animations for drag state changes
+                val elevation by animateDpAsState(
+                    targetValue = if (isDragging) 16.dp else 0.dp,
+                    animationSpec = spring(), label = "elevation"
+                )
+                val scale by animateFloatAsState(
+                    targetValue = if (isDragging) 1.08f else 1.0f,
+                    animationSpec = spring(), label = "scale"
+                )
 
                 Box(
                     modifier = Modifier
                         .zIndex(if (isDragging) 10f else 1f)
+                        .scale(scale)
                         .offset(
                             x = if (isDragging) dragOffsetX.dp else 0.dp,
                             y = if (isDragging) dragOffsetY.dp else 0.dp
                         )
                         .animateItem()
-                        .shadow(elevation, RoundedCornerShape(16.dp))
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(if (isEnabled) Color.White else Color(0xFFE0E0E0))
+                        .shadow(elevation, RoundedCornerShape(20.dp))
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(
+                            if (isEnabled) MaterialTheme.colorScheme.surfaceContainerHigh
+                            else MaterialTheme.colorScheme.surfaceContainerLow
+                        )
                         .border(
-                            width = 2.dp,
-                            color = if (isEnabled) tool.tintColor.copy(alpha = 0.6f) else Color.Transparent,
-                            shape = RoundedCornerShape(16.dp)
+                            width = 1.5.dp,
+                            color = if (isEnabled) tool.tintColor.copy(alpha = 0.4f) else Color.Transparent,
+                            shape = RoundedCornerShape(20.dp)
                         )
                         .clickable {
                             val nextState = !isEnabled
@@ -133,7 +169,11 @@ fun MainScreen(
                                     dragOffsetY += dragAmount.y / density
 
                                     val currentIdx = draggedIndex ?: return@detectDragGesturesAfterLongPress
-                                    val targetIndex = (currentIdx + (dragOffsetY / 100f).toInt() * 3 + (dragOffsetX / 100f).toInt())
+
+                                    // Adaptive threshold checking based on visual grid bounds instead of static scales
+                                    val colOffset = (dragOffsetX / 85f).toInt()
+                                    val rowOffset = (dragOffsetY / 95f).toInt()
+                                    val targetIndex = (currentIdx + rowOffset * 3 + colOffset)
                                         .coerceIn(0, orderedTools.lastIndex)
 
                                     if (targetIndex != currentIdx) {
@@ -150,52 +190,78 @@ fun MainScreen(
                                 onDragCancel = { draggedIndex = null }
                             )
                         }
-                        .padding(vertical = 16.dp),
+                        .padding(vertical = 18.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        // Smoothly desaturate icon containers when disabled
                         Box(
                             modifier = Modifier
-                                .size(52.dp)
+                                .size(48.dp)
                                 .clip(RoundedCornerShape(14.dp))
-                                .background(if (isEnabled) tool.tintColor else Color.DarkGray.copy(alpha = 0.3f)),
+                                .background(
+                                    if (isEnabled) tool.tintColor
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                                ),
                             contentAlignment = Alignment.Center
                         ) {
                             Image(
                                 painter = painterResource(id = tool.iconRes),
                                 contentDescription = tool.label,
-                                modifier = Modifier.size(26.dp),
-                                colorFilter = ColorFilter.tint(Color.White)
+                                modifier = Modifier.size(24.dp),
+                                colorFilter = ColorFilter.tint(
+                                    if (isEnabled) Color.White
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             )
                         }
-                        Spacer(Modifier.height(8.dp))
+
+                        Spacer(Modifier.height(10.dp))
+
                         Text(
                             text = tool.label,
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = if (isEnabled) Color(0xFF212121) else Color.Gray,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isEnabled) MaterialTheme.colorScheme.onSurface
+                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                             textAlign = TextAlign.Center,
-                            maxLines = 1
+                            maxLines = 1,
+                            modifier = Modifier.padding(horizontal = 4.dp)
                         )
                     }
                 }
             }
         }
 
+        // --- LOWER SERVICE ACTION BUTTONS ---
         Column(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Button(onClick = onStartClick, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
+            Button(
+                onClick = onStartClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(16.dp),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
+            ) {
                 Text("Start Floating Ball Service", fontSize = 15.sp, fontWeight = FontWeight.Bold)
             }
-            Button(
+
+            TextButton(
                 onClick = onStopClick,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF5350)),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                ),
+                shape = RoundedCornerShape(16.dp)
             ) {
-                Text("Close Assistive Engine", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text("Close Assistive Engine", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }
