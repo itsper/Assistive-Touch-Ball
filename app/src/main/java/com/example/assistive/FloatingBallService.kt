@@ -221,8 +221,6 @@ class FloatingBallService : AccessibilityService() {
         }
         map[R.id.btn_bluetooth] = {
             closeMenuThenDo(100L) {
-                // Expand the system quick settings panel instantly
-                // This gives immediate access to the native Bluetooth toggle tile
                 performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)
             }
         }
@@ -277,8 +275,6 @@ class FloatingBallService : AccessibilityService() {
         actionMap = map
     }
 
-    // ─── Pager Logic & Dynamic Sorting ───────────────────────────────────────
-
     private fun showMenu() {
         val prefs = getSharedPreferences("AssistivePrefs", Context.MODE_PRIVATE)
         val defaultOrder = "btn_home,btn_back,btn_recents,btn_screenshot,btn_volume,btn_flashlight,btn_notification,btn_brightness,btn_rotate,btn_wifi,btn_data,btn_bluetooth,btn_airplane,btn_hotspot,btn_onehanded"
@@ -327,7 +323,6 @@ class FloatingBallService : AccessibilityService() {
         }
 
         activeResIds.add(R.id.btn_close)
-
         val pages = activeResIds.chunked(6)
 
         viewPager.adapter = MenuPagerAdapter(pages, actionMap)
@@ -384,8 +379,6 @@ class FloatingBallService : AccessibilityService() {
             startForeground(1, notification)
         }
     }
-
-    // ─── Inner ViewPager2 Adapter ────────────────────────────────────────────
 
     private class MenuPagerAdapter(
         private val pages: List<List<Int>>,
