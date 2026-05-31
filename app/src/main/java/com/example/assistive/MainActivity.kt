@@ -96,22 +96,25 @@ data class ToolItem(
     val enabledByDefault: Boolean
 )
 
-// 🔥 FIX 1: All tools set to true by default
-private val ALL_TOOLS = listOf(
-    ToolItem("btn_home",         "Home",         true),
-    ToolItem("btn_back",         "Back",         true),
-    ToolItem("btn_recents",      "Recents",      true),
-    ToolItem("btn_screenshot",   "Screenshot",   true),
-    ToolItem("btn_volume",       "Volume",       true),
-    ToolItem("btn_flashlight",   "Flashlight",   true),
-    ToolItem("btn_notification", "Notification", true),
-    ToolItem("btn_brightness",   "Brightness",   true),
-    ToolItem("btn_rotate",       "Auto-Rotate",  true),
-    ToolItem("btn_wifi",         "Wi-Fi",        true),
-    ToolItem("btn_data",         "Mobile Data",  true)
+internal val ALL_TOOLS = listOf(
+    ToolItem("btn_home",         "Home",          true),
+    ToolItem("btn_back",         "Back",          true),
+    ToolItem("btn_recents",      "Recents",       true),
+    ToolItem("btn_screenshot",   "Screenshot",    true),
+    ToolItem("btn_volume",       "Volume",        true),
+    ToolItem("btn_flashlight",   "Flashlight",    true),
+    ToolItem("btn_notification", "Notification",  true),
+    ToolItem("btn_brightness",   "Brightness",    true),
+    ToolItem("btn_rotate",       "Auto-Rotate",   true),
+    ToolItem("btn_wifi",         "Wi-Fi",         true),
+    ToolItem("btn_data",         "Mobile Data",   true),
+    ToolItem("btn_bluetooth",    "Bluetooth",     true),
+    ToolItem("btn_airplane",     "Airplane Mode", true),
+    ToolItem("btn_hotspot",      "Hotspot",       true),
+    ToolItem("btn_onehanded",    "One-Handed",    true)
 )
 
-private const val PREF_ORDER_KEY   = "tool_order"
+private const val PREF_ORDER_KEY = "tool_order"
 
 private fun loadOrderedTools(prefs: android.content.SharedPreferences): List<ToolItem> {
     val saved = prefs.getString(PREF_ORDER_KEY, null) ?: return ALL_TOOLS
@@ -148,9 +151,9 @@ fun MainScreen(
 
     val activeCount = selectedMap.values.count { it }
 
-    var draggedIndex  by remember { mutableStateOf<Int?>(null) }
-    var dragOffsetY   by remember { mutableStateOf(0f) }
-    val itemHeightPx  = with(LocalDensity.current) { 64.dp.toPx() }
+    var draggedIndex by remember { mutableStateOf<Int?>(null) }
+    var dragOffsetY  by remember { mutableStateOf(0f) }
+    val itemHeightPx = with(LocalDensity.current) { 64.dp.toPx() }
 
     Column(
         modifier = modifier
@@ -176,7 +179,6 @@ fun MainScreen(
 
         Spacer(Modifier.height(14.dp))
 
-        // 🔥 FIX 2: Updated counter badge to reflect all items available dynamically
         Surface(
             shape = RoundedCornerShape(50),
             color = MaterialTheme.colorScheme.secondaryContainer
@@ -275,7 +277,6 @@ fun MainScreen(
                                         if (liveIdx != -1) {
                                             val rawTarget = liveIdx + (dragOffsetY / itemHeightPx).roundToInt()
                                             val target    = rawTarget.coerceIn(0, orderedTools.lastIndex)
-
                                             if (target != liveIdx) {
                                                 orderedTools.add(target, orderedTools.removeAt(liveIdx))
                                                 dragOffsetY -= (target - liveIdx) * itemHeightPx
@@ -302,7 +303,6 @@ fun MainScreen(
                         modifier = Modifier.weight(1f)
                     )
 
-                    // 🔥 FIX 3: Removed the 'enabled = isChecked || !atLimit' restriction
                     Switch(
                         checked = isChecked,
                         onCheckedChange = { newVal ->

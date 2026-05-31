@@ -38,8 +38,8 @@ class FloatingBallService : AccessibilityService() {
     private var isMenuVisible = false
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var buttonMap = mapOf<String, View>()
-    private var btnClose: View? = null
+
+    private lateinit var actionMap: Map<Int, () -> Unit>
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == "ACTION_STOP_SERVICE") {
@@ -60,28 +60,10 @@ class FloatingBallService : AccessibilityService() {
         ballView = inflater.inflate(R.layout.floating_ball_layout, null)
         menuView = inflater.inflate(R.layout.floating_menu_layout, null)
 
-        // Find the view pager structures from the main menu container
         viewPager = menuView.findViewById(R.id.menu_viewpager)
         pageIndicator = menuView.findViewById(R.id.txt_page_indicator)
 
-        // 🔥 FIX: Inflate a master template view of the page grid layout to map your buttons!
-        val masterPageTemplate = inflater.inflate(R.layout.floating_menu_page, null)
-
-        // Now we safely search masterPageTemplate instead of menuView!
-        buttonMap = mapOf(
-            "btn_home" to masterPageTemplate.findViewById(R.id.btn_home),
-            "btn_back" to masterPageTemplate.findViewById(R.id.btn_back),
-            "btn_recents" to masterPageTemplate.findViewById(R.id.btn_recents),
-            "btn_screenshot" to masterPageTemplate.findViewById(R.id.btn_screenshot),
-            "btn_volume" to masterPageTemplate.findViewById(R.id.btn_volume),
-            "btn_flashlight" to masterPageTemplate.findViewById(R.id.btn_flashlight),
-            "btn_notification" to masterPageTemplate.findViewById(R.id.btn_notification),
-            "btn_brightness" to masterPageTemplate.findViewById(R.id.btn_brightness),
-            "btn_rotate" to masterPageTemplate.findViewById(R.id.btn_rotate),
-            "btn_wifi" to masterPageTemplate.findViewById(R.id.btn_wifi),
-            "btn_data" to masterPageTemplate.findViewById(R.id.btn_data)
-        )
-        btnClose = masterPageTemplate.findViewById(R.id.btn_close)
+        setupActionMap()
 
         val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -109,12 +91,11 @@ class FloatingBallService : AccessibilityService() {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             PixelFormat.TRANSLUCENT
         ).apply {
-            // Change from Gravity.CENTER to this:
             gravity = Gravity.TOP or Gravity.START
         }
 
-        setupMenuButtons()
         setupOutsideTouchDismiss()
+        setupBallTouchListener()
         addBallView()
     }
 
@@ -181,51 +162,183 @@ class FloatingBallService : AccessibilityService() {
         }
     }
 
+    private fun closeMenuThenDo(delayMs: Long = 120L, action: () -> Unit) {
+        safeRemoveMenu()
+        addBallView()
+        mainHandler.postDelayed(action, delayMs)
+    }
+
+    private fun closeMenu() {
+        safeRemoveMenu()
+        addBallView()
+    }
+
+    private fun setupActionMap() {
+        val map = mutableMapOf<Int, () -> Unit>()
+
+        map[R.id.btn_home]       = { performGlobalAction(GLOBAL_ACTION_HOME); closeMenu() }
+        map[R.id.btn_back]       = { closeMenuThenDo(120L) { performGlobalAction(GLOBAL_ACTION_BACK) } }
+        map[R.id.btn_recents]    = { performGlobalAction(GLOBAL_ACTION_RECENTS); closeMenu() }
+        map[R.id.btn_screenshot] = {
+            closeMenuThenDo(200L) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
+                    performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT)
+            }
+        }
+        map[R.id.btn_brightness] = {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.System.canWrite(this)) {
+                val cr = contentResolver
+                val current = Settings.System.getInt(cr, Settings.System.SCREEN_BRIGHTNESS, 125)
+                val next = when { current < 80 -> 130; current < 180 -> 255; else -> 30 }
+                Settings.System.putInt(cr, Settings.System.SCREEN_BRIGHTNESS, next)
+            }
+            closeMenu()
+        }
+        map[R.id.btn_rotate] = {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.System.canWrite(this)) {
+                val cr = contentResolver
+                val state = Settings.System.getInt(cr, Settings.System.ACCELEROMETER_ROTATION, 0)
+                Settings.System.putInt(cr, Settings.System.ACCELEROMETER_ROTATION, if (state == 1) 0 else 1)
+            }
+            closeMenu()
+        }
+        map[R.id.btn_wifi] = {
+            closeMenuThenDo(100L) {
+                val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+                    Intent(Settings.Panel.ACTION_INTERNET_CONNECTIVITY)
+                else
+                    Intent(Settings.ACTION_WIFI_SETTINGS)
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(intent)
+            }
+        }
+        map[R.id.btn_data] = {
+            closeMenuThenDo(100L) {
+                startActivity(Intent(Settings.ACTION_DATA_ROAMING_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                })
+            }
+        }
+        map[R.id.btn_bluetooth] = {
+            closeMenuThenDo(100L) {
+                startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                })
+            }
+        }
+        map[R.id.btn_airplane] = {
+            closeMenuThenDo(100L) {
+                startActivity(Intent(Settings.ACTION_AIRPLANE_MODE_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                })
+            }
+        }
+        map[R.id.btn_hotspot] = {
+            closeMenuThenDo(100L) {
+                startActivity(Intent("android.settings.TETHER_SETTINGS").apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                })
+            }
+        }
+        map[R.id.btn_notification] = {
+            performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
+            closeMenu()
+        }
+        map[R.id.btn_onehanded] = {
+            closeMenuThenDo(100L) {
+                if (Build.VERSION.SDK_INT >= 31) performGlobalAction(GLOBAL_ACTION_ACCESSIBILITY_BUTTON)
+                val intent = Intent("android.settings.ONE_HANDED_SETTINGS").apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                try {
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    startActivity(Intent(Settings.ACTION_SETTINGS).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    })
+                }
+            }
+        }
+        map[R.id.btn_volume] = {
+            val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_SAME, AudioManager.FLAG_SHOW_UI)
+            closeMenu()
+        }
+        map[R.id.btn_flashlight] = {
+            try {
+                val cam = getSystemService(Context.CAMERA_SERVICE) as CameraManager
+                isFlashlightOn = !isFlashlightOn
+                cam.setTorchMode(cam.cameraIdList[0], isFlashlightOn)
+            } catch (e: Exception) { e.printStackTrace() }
+            closeMenu()
+        }
+        map[R.id.btn_close] = { closeMenu() }
+
+        actionMap = map
+    }
+
     // ─── Pager Logic & Dynamic Sorting ───────────────────────────────────────
 
     private fun showMenu() {
         val prefs = getSharedPreferences("AssistivePrefs", Context.MODE_PRIVATE)
-        val defaultOrder = "btn_home,btn_back,btn_recents,btn_screenshot,btn_volume,btn_flashlight,btn_notification,btn_brightness,btn_rotate,btn_wifi,btn_data"
+        val defaultOrder = "btn_home,btn_back,btn_recents,btn_screenshot,btn_volume,btn_flashlight,btn_notification,btn_brightness,btn_rotate,btn_wifi,btn_data,btn_bluetooth,btn_airplane,btn_hotspot,btn_onehanded"
         val savedOrder = prefs.getString("tool_order", defaultOrder) ?: defaultOrder
         val orderedKeys = savedOrder.split(",").filter { it.isNotEmpty() }
-        val defaults = setOf("btn_home", "btn_back", "btn_recents")
 
-        // 1. Gather all enabled views in order
-        val activeViews = mutableListOf<View>()
+        val keyToIdMap = mapOf(
+            "btn_home"         to R.id.btn_home,
+            "btn_back"         to R.id.btn_back,
+            "btn_recents"      to R.id.btn_recents,
+            "btn_screenshot"   to R.id.btn_screenshot,
+            "btn_volume"       to R.id.btn_volume,
+            "btn_flashlight"   to R.id.btn_flashlight,
+            "btn_notification" to R.id.btn_notification,
+            "btn_brightness"   to R.id.btn_brightness,
+            "btn_rotate"       to R.id.btn_rotate,
+            "btn_wifi"         to R.id.btn_wifi,
+            "btn_data"         to R.id.btn_data,
+            "btn_bluetooth"    to R.id.btn_bluetooth,
+            "btn_airplane"     to R.id.btn_airplane,
+            "btn_hotspot"      to R.id.btn_hotspot,
+            "btn_onehanded"    to R.id.btn_onehanded
+        )
+
+        val activeResIds = mutableListOf<Int>()
+        val processedKeys = mutableSetOf<String>()
+
         orderedKeys.forEach { key ->
-            val view = buttonMap[key]
-            val isEnabled = prefs.getBoolean(key, key in defaults)
-            if (view != null && isEnabled) {
-                // Completely detach from old parent containers before reuse
-                (view.parent as? ViewGroup)?.removeView(view)
-                view.visibility = View.VISIBLE
-                activeViews.add(view)
+            processedKeys.add(key)
+            val enabledByDefault = ALL_TOOLS.find { it.key == key }?.enabledByDefault ?: false
+            val isEnabled = prefs.getBoolean(key, enabledByDefault)
+            val resId = keyToIdMap[key]
+            if (resId != null && isEnabled) {
+                activeResIds.add(resId)
             }
         }
 
-        // 2. Always append the red close button to the end of the collection
-        btnClose?.let { closeView ->
-            (closeView.parent as? ViewGroup)?.removeView(closeView)
-            closeView.visibility = View.VISIBLE
-            activeViews.add(closeView)
+        ALL_TOOLS.forEach { tool ->
+            if (tool.key !in processedKeys) {
+                val isEnabled = prefs.getBoolean(tool.key, tool.enabledByDefault)
+                val resId = keyToIdMap[tool.key]
+                if (resId != null && isEnabled) {
+                    activeResIds.add(resId)
+                }
+            }
         }
 
-        // 3. Chunk our views into groups of max 6 items per page
-        val pages = activeViews.chunked(6)
+        activeResIds.add(R.id.btn_close)
 
-        // 4. Bind our pages to the ViewPager2
-        viewPager.adapter = MenuPagerAdapter(pages)
+        val pages = activeResIds.chunked(6)
 
-        // 5. Setup the text indicator update listener (e.g. "1 / 2")
+        viewPager.adapter = MenuPagerAdapter(pages, actionMap)
+
         viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
                 pageIndicator.text = "${position + 1} / ${pages.size}"
-                // Hide indicator if there is only 1 page to read
                 pageIndicator.visibility = if (pages.size > 1) View.VISIBLE else View.GONE
             }
         })
 
-        // Force reset back to page 1 upon opening
         viewPager.setCurrentItem(0, false)
 
         val displayMetrics = resources.displayMetrics
@@ -238,18 +351,10 @@ class FloatingBallService : AccessibilityService() {
         val ballSizePx   = (60  * density).toInt()
         val edgePadPx    = (8   * density).toInt()
 
-// Determine which side the ball is on by its center point
         val ballCenterX = ballParams.x + ballSizePx / 2
         val isOnLeftSide = ballCenterX < screenWidth / 2
 
-// Snap menu firmly to that screen edge — never floats in the middle
-        val targetX = if (isOnLeftSide) {
-            edgePadPx                                    // Hug left edge
-        } else {
-            screenWidth - menuWidthPx - edgePadPx        // Hug right edge
-        }
-
-// Vertically center the menu with the ball, clamped within screen bounds
+        val targetX = if (isOnLeftSide) edgePadPx else screenWidth - menuWidthPx - edgePadPx
         var targetY = ballParams.y - (menuHeightPx / 2) + (ballSizePx / 2)
         targetY = targetY.coerceIn(edgePadPx, screenHeight - menuHeightPx - edgePadPx)
 
@@ -258,93 +363,6 @@ class FloatingBallService : AccessibilityService() {
 
         safeRemoveBall()
         addMenuView()
-    }
-
-    private fun closeMenuThenDo(delayMs: Long = 120L, action: () -> Unit) {
-        safeRemoveMenu()
-        addBallView()
-        mainHandler.postDelayed(action, delayMs)
-    }
-
-    private fun closeMenu() {
-        safeRemoveMenu()
-        addBallView()
-    }
-
-    private fun setupMenuButtons() {
-        buttonMap["btn_home"]?.setOnClickListener { performGlobalAction(GLOBAL_ACTION_HOME); closeMenu() }
-        buttonMap["btn_back"]?.setOnClickListener { closeMenuThenDo(120L) { performGlobalAction(GLOBAL_ACTION_BACK) } }
-        buttonMap["btn_recents"]?.setOnClickListener { performGlobalAction(GLOBAL_ACTION_RECENTS); closeMenu() }
-        buttonMap["btn_screenshot"]?.setOnClickListener {
-            closeMenuThenDo(200L) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
-                    performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT)
-            }
-        }
-        buttonMap["btn_brightness"]?.setOnClickListener {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.System.canWrite(this)) {
-                val cr = contentResolver
-                val current = Settings.System.getInt(cr, Settings.System.SCREEN_BRIGHTNESS, 125)
-                val nextBrightness = when {
-                    current < 80 -> 130   // Go to medium
-                    current < 180 -> 255  // Go to full max
-                    else -> 30            // Reset back to dim low
-                }
-                Settings.System.putInt(cr, Settings.System.SCREEN_BRIGHTNESS, nextBrightness)
-            }
-            closeMenu()
-        }
-
-        buttonMap["btn_rotate"]?.setOnClickListener {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.System.canWrite(this)) {
-                val cr = contentResolver
-                val state = Settings.System.getInt(cr, Settings.System.ACCELEROMETER_ROTATION, 0)
-                val nextState = if (state == 1) 0 else 1
-                Settings.System.putInt(cr, Settings.System.ACCELEROMETER_ROTATION, nextState)
-            }
-            closeMenu()
-        }
-
-        buttonMap["btn_wifi"]?.setOnClickListener {
-            closeMenuThenDo(100L) {
-                val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    Intent(Settings.Panel.ACTION_INTERNET_CONNECTIVITY)
-                } else {
-                    Intent(Settings.ACTION_WIFI_SETTINGS)
-                }
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                startActivity(intent)
-            }
-        }
-
-        // 📊 MOBILE DATA: Launches directly into cellular info pane
-        buttonMap["btn_data"]?.setOnClickListener {
-            closeMenuThenDo(100L) {
-                val intent = Intent(Settings.ACTION_DATA_ROAMING_SETTINGS).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                startActivity(intent)
-            }
-        }
-
-        buttonMap["btn_volume"]?.setOnClickListener {
-            val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-            audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_SAME, AudioManager.FLAG_SHOW_UI)
-            closeMenu()
-        }
-        buttonMap["btn_flashlight"]?.setOnClickListener {
-            try {
-                val cam = getSystemService(Context.CAMERA_SERVICE) as CameraManager
-                isFlashlightOn = !isFlashlightOn
-                cam.setTorchMode(cam.cameraIdList[0], isFlashlightOn)
-            } catch (e: Exception) { e.printStackTrace() }
-            closeMenu()
-        }
-        buttonMap["btn_notification"]?.setOnClickListener { performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS); closeMenu() }
-        btnClose?.setOnClickListener { closeMenu() }
-
-        setupBallTouchListener()
-
     }
 
     private fun startMyForegroundService() {
@@ -360,13 +378,8 @@ class FloatingBallService : AccessibilityService() {
             .setSmallIcon(android.R.drawable.ic_menu_compass)
             .build()
 
-        // Pass the service type flags if running on Android 14+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(
-                1,
-                notification,
-                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            )
+            startForeground(1, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
             startForeground(1, notification)
         }
@@ -374,8 +387,10 @@ class FloatingBallService : AccessibilityService() {
 
     // ─── Inner ViewPager2 Adapter ────────────────────────────────────────────
 
-    private class MenuPagerAdapter(private val pages: List<List<View>>) :
-        RecyclerView.Adapter<MenuPagerAdapter.PageViewHolder>() {
+    private class MenuPagerAdapter(
+        private val pages: List<List<Int>>,
+        private val actions: Map<Int, () -> Unit>
+    ) : RecyclerView.Adapter<MenuPagerAdapter.PageViewHolder>() {
 
         class PageViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             val gridLayout: GridLayout = view.findViewById(R.id.page_grid)
@@ -388,21 +403,31 @@ class FloatingBallService : AccessibilityService() {
 
         override fun onBindViewHolder(holder: PageViewHolder, position: Int) {
             holder.gridLayout.removeAllViews()
-            val density = holder.itemView.resources.displayMetrics.density
-            val widthPx = (90 * density).toInt()   // Matches new layout layout_width
-            val heightPx = (60 * density).toInt()  // Matches new layout layout_height
-            val marginPx = (4 * density).toInt()   // Matches new layout layout_margin
 
-            pages[position].forEach { view ->
-                // Clean views safety check
-                (view.parent as? ViewGroup)?.removeView(view)
+            val context = holder.itemView.context
+            val density = context.resources.displayMetrics.density
+            val widthPx  = (90 * density).toInt()
+            val heightPx = (60 * density).toInt()
+            val marginPx = (4  * density).toInt()
 
-                val params = GridLayout.LayoutParams().apply {
-                    width = widthPx
-                    height = heightPx
-                    setMargins(marginPx, marginPx, marginPx, marginPx)
+            val inflater = LayoutInflater.from(context)
+            val fullTemplate = inflater.inflate(R.layout.floating_menu_page, null) as ViewGroup
+            val targetedGrid = fullTemplate.findViewById<GridLayout>(R.id.page_grid)
+
+            pages[position].forEach { resId ->
+                val button = targetedGrid.findViewById<View>(resId)
+                if (button != null) {
+                    targetedGrid.removeView(button)
+                    button.visibility = View.VISIBLE
+                    button.setOnClickListener { actions[resId]?.invoke() }
+
+                    val params = GridLayout.LayoutParams().apply {
+                        width  = widthPx
+                        height = heightPx
+                        setMargins(marginPx, marginPx, marginPx, marginPx)
+                    }
+                    holder.gridLayout.addView(button, params)
                 }
-                holder.gridLayout.addView(view, params)
             }
         }
 
