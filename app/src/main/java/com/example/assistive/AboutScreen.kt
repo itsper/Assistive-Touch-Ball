@@ -105,7 +105,7 @@ fun AboutScreen() {
                 InfoRow(
                     icon = Icons.Rounded.Person,
                     label = "Developer",
-                    value = "Per Jansen M. Victoriano"
+                    value = "itsperr"
                 )
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
