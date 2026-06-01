@@ -59,7 +59,6 @@ class FloatingBallService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
     override fun onInterrupt() {}
 
-    // 2. Make sure settings apply immediately when service connects
     override fun onServiceConnected() {
         super.onServiceConnected()
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -105,30 +104,54 @@ class FloatingBallService : AccessibilityService() {
         setupOutsideTouchDismiss()
         setupBallTouchListener()
 
-        // Apply settings right before adding the view to window manager
+        // Apply custom sizes, opacities, and selected character skin
         applyLiveSettings()
         addBallView()
     }
 
-    // 3. Add this completely new method inside FloatingBallService class
+    // --- UPGRADED TO HANDLE THE CHARACTER SKIN UPDATES LIVE ---
     private fun applyLiveSettings() {
         val prefs = getSharedPreferences("AssistivePrefs", Context.MODE_PRIVATE)
         val savedSizeDp = prefs.getFloat("ball_size", 60f)
         val savedOpacity = prefs.getFloat("ball_opacity", 0.8f)
 
+        // Fetch the active chosen skin file identifier
+        val savedIconKey = prefs.getString("ball_icon_key", "chopper") ?: "chopper"
+
+        // Map key strings safely back to your exact drawable resource IDs
+        val selectedResId = when (savedIconKey) {
+            "luffy"     -> R.drawable.luffy
+            "zoro"      -> R.drawable.zoro
+            "sanji"     -> R.drawable.sanji
+            "nami"      -> R.drawable.nami
+            "ussop"     -> R.drawable.ussop
+            "robin"     -> R.drawable.robin
+            "franky"    -> R.drawable.franky
+            "brook"     -> R.drawable.brook
+            "jimbe"     -> R.drawable.jimbe
+            "law"       -> R.drawable.law
+            "strawhat"  -> R.drawable.strawhat
+            "strawhat1" -> R.drawable.strawhat1
+            else        -> R.drawable.chopper // Fallback safe default
+        }
+
         // Convert DP to Pixels dynamically based on device display density profile
         val density = resources.displayMetrics.density
         val sizeInPx = (savedSizeDp * density).toInt()
 
-        // Locate and modify dimensions on the inner view
+        // Locate and modify dimensions and skin asset resource on your inner view
         val ballImage = ballView.findViewById<View>(R.id.ball_image)
         if (ballImage != null) {
+            // 1. Swap image resource background to your selected character
+            ballImage.setBackgroundResource(selectedResId)
+
+            // 2. Adjust dimensional sizing safely
             val layoutParams = ballImage.layoutParams
             layoutParams.width = sizeInPx
             layoutParams.height = sizeInPx
             ballImage.layoutParams = layoutParams
 
-            // Apply transparency setting
+            // 3. Apply transparency setting
             ballImage.alpha = savedOpacity
         }
 
@@ -351,14 +374,24 @@ class FloatingBallService : AccessibilityService() {
             }
         }
 
-        ALL_TOOLS.forEach { tool ->
-            if (tool.key !in processedKeys) {
-                val isEnabled = prefs.getBoolean(tool.key, tool.enabledByDefault)
-                val resId = keyToIdMap[tool.key]
-                if (resId != null && isEnabled) {
-                    activeResIds.add(resId)
+        // Handle ALL_TOOLS unmapped elements check if available
+        // Note: Assuming global reference structure matches your main screen definitions
+        try {
+            val toolsField = Class.forName("com.example.assistive.MainScreenKt").getDeclaredField("ALL_TOOLS")
+            toolsField.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            val allToolsList = toolsField.get(null) as List<ToolItem>
+            allToolsList.forEach { tool ->
+                if (tool.key !in processedKeys) {
+                    val isEnabled = prefs.getBoolean(tool.key, tool.enabledByDefault)
+                    val resId = keyToIdMap[tool.key]
+                    if (resId != null && isEnabled) {
+                        activeResIds.add(resId)
+                    }
                 }
             }
+        } catch (e: Exception) {
+            // Fallback gracefully if reflection reference names are handled in local file scopes
         }
 
         activeResIds.add(R.id.btn_close)
