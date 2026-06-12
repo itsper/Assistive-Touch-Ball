@@ -21,6 +21,7 @@ import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.SeekBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -57,6 +58,7 @@ class FloatingBallService : AccessibilityService() {
     // Media3 player & coroutine variables
     private var player: ExoPlayer? = null
     private var folderList = listOf<FolderModel>() // Tracks grouped directories
+    private var allSongsList = listOf<AudioModel>() // Cache of all scanned local songs
     private var audioList = listOf<AudioModel>()   // Tracks actively playing folder list contents
     private var currentTrackIndex = -1
     private var activeMusicViewHolder: MusicViewHolder? = null
@@ -517,12 +519,15 @@ class FloatingBallService : AccessibilityService() {
 
     private fun scanLocalSongs() {
         serviceScope.launch {
+            // Fetch flat song list
+            allSongsList = AudioModel.scanLocalAudioFiles(this@FloatingBallService)
+            
             // Fetch grouped system folder directory configurations asynchronously
             folderList = FolderModel.scanLocalFolders(this@FloatingBallService)
             
-            // Default safe baseline fallback setup (Load the first folder's track items initially)
-            if (folderList.isNotEmpty()) {
-                audioList = folderList[0].songs
+            // Default safe baseline fallback setup (Load all songs initially)
+            if (allSongsList.isNotEmpty()) {
+                audioList = allSongsList
                 loadMediaItems()
             }
         }
@@ -673,6 +678,16 @@ class FloatingBallService : AccessibilityService() {
                 // Collapse panel interface straight back out to main active music overlay frame cleanly
                 holder.layoutPlaylist.visibility = View.GONE
                 holder.layoutPlayer.visibility = View.VISIBLE
+            },
+            onAllSongClicked = { allSongIndex ->
+                // User tapped a song in the "All Songs" list!
+                // Swap actively playing queue to ALL scanned songs:
+                audioList = allSongsList
+                loadMediaItems()
+                playTrack(allSongIndex)
+                
+                holder.layoutPlaylist.visibility = View.GONE
+                holder.layoutPlayer.visibility = View.VISIBLE
             }
         )
 
@@ -684,23 +699,23 @@ class FloatingBallService : AccessibilityService() {
             holder.layoutPlayer.visibility = View.GONE
             holder.layoutPlaylist.visibility = View.VISIBLE
 
-            if (folderList.isEmpty()) {
+            if (folderList.isEmpty() && allSongsList.isEmpty()) {
                 holder.txtEmptyPlaylist.visibility = View.VISIBLE
                 holder.playlistRecycler.visibility = View.GONE
             } else {
                 holder.txtEmptyPlaylist.visibility = View.GONE
                 holder.playlistRecycler.visibility = View.VISIBLE
                 
-                // Always launch with high-level folder list layout first
-                unifiedAdapter.setFolders(folderList)
+                // Always launch with high-level folder list layout and all songs list below it
+                unifiedAdapter.setFoldersAndAllSongs(folderList, allSongsList)
             }
         }
 
         // Dynamic Multi-Level Back Button Interception Action
         holder.btnPlaylistBack.setOnClickListener {
             if (!unifiedAdapter.isDisplayingFolders) {
-                // If viewing tracks inside a directory, drop back to the top-level folders listing
-                unifiedAdapter.setFolders(folderList)
+                // If viewing tracks inside a directory, drop back to the top-level folders and all songs listing
+                unifiedAdapter.setFoldersAndAllSongs(folderList, allSongsList)
             } else {
                 // If already at folders index level, completely return to the main overlay widget panel
                 holder.layoutPlaylist.visibility = View.GONE
@@ -721,6 +736,9 @@ class FloatingBallService : AccessibilityService() {
             player?.let { p ->
                 p.shuffleModeEnabled = !p.shuffleModeEnabled
                 updatePlayerUI()
+                
+                val message = if (p.shuffleModeEnabled) "Shuffle: ON" else "Shuffle: OFF"
+                Toast.makeText(this@FloatingBallService, message, Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -856,31 +874,37 @@ class FloatingBallService : AccessibilityService() {
     // --- Playlist RecyclerView Adapter ---
     private class PlaylistAdapter(
         private val onFolderClicked: (FolderModel) -> Unit,
-        private val onSongClicked: (Int) -> Unit
+        private val onSongClicked: (Int) -> Unit,
+        private val onAllSongClicked: (Int) -> Unit
     ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
         private val TYPE_FOLDER = 0
         private val TYPE_SONG = 1
 
         private var currentFolders = listOf<FolderModel>()
-        private var currentSongs = listOf<AudioModel>()
+        private var allSongs = listOf<AudioModel>()
+        private var folderSongs = listOf<AudioModel>()
         var isDisplayingFolders = true
             private set
 
-        fun setFolders(folders: List<FolderModel>) {
+        fun setFoldersAndAllSongs(folders: List<FolderModel>, allSongs: List<AudioModel>) {
             this.currentFolders = folders
+            this.allSongs = allSongs
             this.isDisplayingFolders = true
             notifyDataSetChanged()
         }
 
         fun setSongs(songs: List<AudioModel>) {
-            this.currentSongs = songs
+            this.folderSongs = songs
             this.isDisplayingFolders = false
             notifyDataSetChanged()
         }
 
         override fun getItemViewType(position: Int): Int {
-            return if (isDisplayingFolders) TYPE_FOLDER else TYPE_SONG
+            if (isDisplayingFolders) {
+                return if (position < currentFolders.size) TYPE_FOLDER else TYPE_SONG
+            }
+            return TYPE_SONG
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
@@ -901,15 +925,27 @@ class FloatingBallService : AccessibilityService() {
                 holder.count.text = "${folder.songs.size} tracks"
                 holder.itemView.setOnClickListener { onFolderClicked(folder) }
             } else if (holder is SongViewHolder) {
-                val song = currentSongs[position]
-                holder.title.text = song.title
-                holder.artist.text = song.artist
-                holder.itemView.setOnClickListener { onSongClicked(position) }
+                if (isDisplayingFolders) {
+                    val songIndex = position - currentFolders.size
+                    val song = allSongs[songIndex]
+                    holder.title.text = song.title
+                    holder.artist.text = song.artist
+                    holder.itemView.setOnClickListener { onAllSongClicked(songIndex) }
+                } else {
+                    val song = folderSongs[position]
+                    holder.title.text = song.title
+                    holder.artist.text = song.artist
+                    holder.itemView.setOnClickListener { onSongClicked(position) }
+                }
             }
         }
 
         override fun getItemCount(): Int {
-            return if (isDisplayingFolders) currentFolders.size else currentSongs.size
+            return if (isDisplayingFolders) {
+                currentFolders.size + allSongs.size
+            } else {
+                folderSongs.size
+            }
         }
 
         class FolderViewHolder(view: View) : RecyclerView.ViewHolder(view) {
