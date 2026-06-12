@@ -368,6 +368,12 @@ class FloatingBallService : AccessibilityService() {
             } catch (e: Exception) { e.printStackTrace() }
             closeMenu()
         }
+        map[R.id.btn_music] = {
+            val adapter = viewPager.adapter
+            if (adapter != null) {
+                viewPager.setCurrentItem(adapter.itemCount - 1, true)
+            }
+        }
         map[R.id.btn_close] = { closeMenu() }
 
         actionMap = map
@@ -375,7 +381,7 @@ class FloatingBallService : AccessibilityService() {
 
     private fun showMenu() {
         val prefs = getSharedPreferences("AssistivePrefs", Context.MODE_PRIVATE)
-        val defaultOrder = "btn_home,btn_back,btn_recents,btn_screenshot,btn_volume,btn_flashlight,btn_notification,btn_brightness,btn_rotate,btn_wifi,btn_data,btn_bluetooth,btn_airplane,btn_hotspot,btn_onehanded"
+        val defaultOrder = "btn_home,btn_back,btn_recents,btn_screenshot,btn_volume,btn_flashlight,btn_notification,btn_brightness,btn_rotate,btn_wifi,btn_data,btn_bluetooth,btn_airplane,btn_hotspot,btn_onehanded,btn_music"
         val savedOrder = prefs.getString("tool_order", defaultOrder) ?: defaultOrder
         val orderedKeys = savedOrder.split(",").filter { it.isNotEmpty() }
 
@@ -394,7 +400,8 @@ class FloatingBallService : AccessibilityService() {
             "btn_bluetooth"    to R.id.btn_bluetooth,
             "btn_airplane"     to R.id.btn_airplane,
             "btn_hotspot"      to R.id.btn_hotspot,
-            "btn_onehanded"    to R.id.btn_onehanded
+            "btn_onehanded"    to R.id.btn_onehanded,
+            "btn_music"        to R.id.btn_music
         )
 
         val activeResIds = mutableListOf<Int>()
@@ -411,22 +418,14 @@ class FloatingBallService : AccessibilityService() {
         }
 
         // Handle ALL_TOOLS unmapped elements check if available
-        try {
-            val toolsField = Class.forName("com.example.assistive.MainScreenKt").getDeclaredField("ALL_TOOLS")
-            toolsField.isAccessible = true
-            @Suppress("UNCHECKED_CAST")
-            val allToolsList = toolsField.get(null) as List<ToolItem>
-            allToolsList.forEach { tool ->
-                if (tool.key !in processedKeys) {
-                    val isEnabled = prefs.getBoolean(tool.key, tool.enabledByDefault)
-                    val resId = keyToIdMap[tool.key]
-                    if (resId != null && isEnabled) {
-                        activeResIds.add(resId)
-                    }
+        ALL_TOOLS.forEach { tool ->
+            if (tool.key !in processedKeys) {
+                val isEnabled = prefs.getBoolean(tool.key, tool.enabledByDefault)
+                val resId = keyToIdMap[tool.key]
+                if (resId != null && isEnabled) {
+                    activeResIds.add(resId)
                 }
             }
-        } catch (e: Exception) {
-            // Fallback gracefully
         }
 
         activeResIds.add(R.id.btn_close)
