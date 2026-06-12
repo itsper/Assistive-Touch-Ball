@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="8dp">
+
+    <!-- STATE 1: Player View -->
+    <LinearLayout
+        android:id="@+id/layout_player"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:visibility="visible">
+
+        <!-- Disc / Art icon -->
+        <ImageView
+            android:id="@+id/img_disc"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@drawable/ic_volume"
+            android:tint="#FFFFFF"
+            android:padding="8dp"
+            android:background="@drawable/btn_item_bg"
+            android:layout_marginBottom="6dp" />
+
+        <!-- Title and Artist -->
+        <TextView
+            android:id="@+id/txt_track_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="No Song Selected"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:paddingHorizontal="4dp" />
+
+        <TextView
+            android:id="@+id/txt_track_artist"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Unknown Artist"
+            android:textColor="#88FFFFFF"
+            android:textSize="10sp"
+            android:gravity="center"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:layout_marginTop="1dp"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Interactive Seek Bar and Timers -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginHorizontal="8dp"
+            android:layout_marginBottom="10dp">
+
+            <TextView
+                android:id="@+id/txt_current_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0:00"
+                android:textColor="#88FFFFFF"
+                android:textSize="9sp" />
+
+            <SeekBar
+                android:id="@+id/player_seekbar"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:max="100"
+                android:progress="0"
+                android:thumbTint="#FFFFFF"
+                android:progressTint="#FFFFFF"
+                android:progressBackgroundTint="#33FFFFFF" />
+
+            <TextView
+                android:id="@+id/txt_total_duration"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0:00"
+                android:textColor="#88FFFFFF"
+                android:textSize="9sp" />
+        </LinearLayout>
+
+        <!-- Playback Controls -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <!-- Playlist Toggle -->
+            <ImageButton
+                android:id="@+id/btn_playlist_toggle"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@drawable/ic_playlist"
+                android:tint="#FFFFFF"
+                android:background="@drawable/btn_item_bg"
+                android:contentDescription="Playlist"
+                android:padding="6dp"
+                android:layout_marginEnd="8dp" />
+
+            <!-- Shuffle Toggle -->
+            <ImageButton
+                android:id="@+id/btn_shuffle"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@android:drawable/ic_menu_revert"
+                android:tint="#88FFFFFF"
+                android:background="@drawable/btn_item_bg"
+                android:contentDescription="Shuffle"
+                android:padding="6dp"
+                android:layout_marginEnd="8dp" />
+
+            <!-- Play/Pause -->
+            <ImageButton
+                android:id="@+id/btn_play_pause"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
+                android:src="@drawable/ic_play"
+                android:tint="#FFFFFF"
+                android:background="@drawable/btn_item_bg"
+                android:contentDescription="Play/Pause"
+                android:padding="8dp" />
+
+            <!-- Skip Next -->
+            <ImageButton
+                android:id="@+id/btn_next"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@drawable/ic_next"
+                android:tint="#FFFFFF"
+                android:background="@drawable/btn_item_bg"
+                android:contentDescription="Skip Next"
+                android:padding="6dp"
+                android:layout_marginStart="8dp" />
+
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- STATE 2: Playlist View -->
+    <LinearLayout
+        android:id="@+id/layout_playlist"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <!-- Playlist Header -->
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="4dp">
+
+            <ImageButton
+                android:id="@+id/btn_playlist_back"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_back"
+                android:tint="#FFFFFF"
+                android:background="@drawable/btn_item_bg"
+                android:layout_alignParentStart="true"
+                android:layout_centerVertical="true"
+                android:padding="4dp"
+                android:contentDescription="Back" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Local Tracks"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:layout_centerInParent="true" />
+        </RelativeLayout>
+
+        <!-- Song list -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/playlist_recycler"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:scrollbars="vertical"/>
+
+        <TextView
+            android:id="@+id/txt_empty_playlist"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:text="No local music files found"
+            android:textColor="#88FFFFFF"
+            android:textSize="10sp"
+            android:gravity="center"
+            android:visibility="gone" />
+
+    </LinearLayout>
+</FrameLayout>

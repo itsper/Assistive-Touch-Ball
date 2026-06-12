@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -35,6 +36,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -44,6 +47,8 @@ fun MainScreen(
     onStopClick: () -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
     val prefs = remember { context.getSharedPreferences("AssistivePrefs", Context.MODE_PRIVATE) }
     val orderedTools = remember { mutableStateListOf<ToolItem>().apply { addAll(loadOrderedTools(prefs)) } }
 
@@ -60,6 +65,9 @@ fun MainScreen(
     var dragOffsetX by remember { mutableFloatStateOf(0f) }
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
 
+    // Cache static shapes to avoid re-allocation during grid layouts
+    val cardShape = remember { RoundedCornerShape(20.dp) }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -69,7 +77,6 @@ fun MainScreen(
     ) {
         Spacer(Modifier.height(20.dp))
 
-        // Instructional Subtitle
         Text(
             text = "Tap cards to toggle. Hold & drag to reorder your floating ball items.",
             style = MaterialTheme.typography.bodyMedium,
@@ -80,7 +87,6 @@ fun MainScreen(
 
         Spacer(Modifier.height(16.dp))
 
-        // Active Status Pill
         Surface(
             shape = RoundedCornerShape(100),
             color = MaterialTheme.colorScheme.primaryContainer,
@@ -108,7 +114,6 @@ fun MainScreen(
 
         Spacer(Modifier.height(24.dp))
 
-        // Reorderable Grid Component
         LazyVerticalGrid(
             columns = GridCells.Fixed(3),
             state = rememberLazyGridState(),
@@ -121,7 +126,6 @@ fun MainScreen(
                 val isEnabled = selectedMap[tool.key] ?: false
                 val isDragging = draggedIndex == index
 
-                // Physics-based spring animations for drag state changes
                 val elevation by animateDpAsState(
                     targetValue = if (isDragging) 16.dp else 0.dp,
                     animationSpec = spring(), label = "elevation"
@@ -131,30 +135,34 @@ fun MainScreen(
                     animationSpec = spring(), label = "scale"
                 )
 
+                val borderColor = remember(isEnabled, tool.tintColor) {
+                    if (isEnabled) tool.tintColor.copy(alpha = 0.4f) else Color.Transparent
+                }
+
                 Box(
                     modifier = Modifier
                         .zIndex(if (isDragging) 10f else 1f)
                         .scale(scale)
-                        .offset(
-                            x = if (isDragging) dragOffsetX.dp else 0.dp,
-                            y = if (isDragging) dragOffsetY.dp else 0.dp
-                        )
+                        .graphicsLayer {
+                            // Using graphicsLayer handles translations smoothly without triggering full recompositions
+                            translationX = if (isDragging) dragOffsetX * density else 0f
+                            translationY = if (isDragging) dragOffsetY * density else 0f
+                        }
                         .animateItem()
-                        .shadow(elevation, RoundedCornerShape(20.dp))
-                        .clip(RoundedCornerShape(20.dp))
+                        .shadow(elevation, cardShape)
+                        .clip(cardShape)
                         .background(
                             if (isEnabled) MaterialTheme.colorScheme.surfaceContainerHigh
                             else MaterialTheme.colorScheme.surfaceContainerLow
                         )
-                        .border(
-                            width = 1.5.dp,
-                            color = if (isEnabled) tool.tintColor.copy(alpha = 0.4f) else Color.Transparent,
-                            shape = RoundedCornerShape(20.dp)
-                        )
+                        .border(width = 1.5.dp, color = borderColor, shape = cardShape)
                         .clickable {
                             val nextState = !isEnabled
                             selectedMap[tool.key] = nextState
-                            prefs.edit().putBoolean(tool.key, nextState).apply()
+                            // Offload disk I/O write to background thread
+                            scope.launch(Dispatchers.IO) {
+                                prefs.edit().putBoolean(tool.key, nextState).apply()
+                            }
                         }
                         .pointerInput(Unit) {
                             detectDragGesturesAfterLongPress(
@@ -170,7 +178,6 @@ fun MainScreen(
 
                                     val currentIdx = draggedIndex ?: return@detectDragGesturesAfterLongPress
 
-                                    // Adaptive threshold checking based on visual grid bounds instead of static scales
                                     val colOffset = (dragOffsetX / 85f).toInt()
                                     val rowOffset = (dragOffsetY / 95f).toInt()
                                     val targetIndex = (currentIdx + rowOffset * 3 + colOffset)
@@ -185,7 +192,10 @@ fun MainScreen(
                                 },
                                 onDragEnd = {
                                     draggedIndex = null
-                                    saveOrder(prefs, orderedTools)
+                                    // Offload heavy save sequence to background thread
+                                    scope.launch(Dispatchers.IO) {
+                                        saveOrder(prefs, orderedTools)
+                                    }
                                 },
                                 onDragCancel = { draggedIndex = null }
                             )
@@ -194,7 +204,6 @@ fun MainScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        // Smoothly desaturate icon containers when disabled
                         Box(
                             modifier = Modifier
                                 .size(48.dp)

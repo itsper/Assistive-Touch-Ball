@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingVertical="8dp"
+    android:paddingHorizontal="8dp"
+    android:background="?android:attr/selectableItemBackground"
+    android:clickable="true"
+    android:focusable="true">
+
+    <ImageView
+        android:layout_width="18dp"
+        android:layout_height="18dp"
+        android:src="@drawable/ic_folder"
+        android:tint="#FFCA28" 
+        android:layout_marginEnd="8dp"
+        android:contentDescription="Folder" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/txt_folder_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Summer Folder"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:singleLine="true"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/txt_folder_count"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="12 Songs"
+            android:textColor="#88FFFFFF"
+            android:textSize="8sp"
+            android:layout_marginTop="1dp" />
+    </LinearLayout>
+</LinearLayout>

@@ -16,11 +16,24 @@ import android.provider.Settings
 import android.view.*
 import android.view.accessibility.AccessibilityEvent
 import android.widget.GridLayout
+import android.widget.ImageButton
+import android.widget.ImageView
+import android.widget.ProgressBar
+import android.widget.SeekBar
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
 import kotlin.math.abs
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class FloatingBallService : AccessibilityService() {
 
@@ -40,6 +53,17 @@ class FloatingBallService : AccessibilityService() {
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private lateinit var actionMap: Map<Int, () -> Unit>
+
+    // Media3 player & coroutine variables
+    private var player: ExoPlayer? = null
+    private var folderList = listOf<FolderModel>() // Tracks grouped directories
+    private var audioList = listOf<AudioModel>()   // Tracks actively playing folder list contents
+    private var currentTrackIndex = -1
+    private var activeMusicViewHolder: MusicViewHolder? = null
+
+    private val serviceJob = Job()
+    private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
+    private var progressJob: Job? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
@@ -107,6 +131,10 @@ class FloatingBallService : AccessibilityService() {
         // Apply custom sizes, opacities, and selected character skin
         applyLiveSettings()
         addBallView()
+
+        // Initialize player and scan files
+        initPlayer()
+        scanLocalSongs()
     }
 
     // --- UPGRADED TO HANDLE THE CHARACTER SKIN UPDATES LIVE ---
@@ -166,6 +194,12 @@ class FloatingBallService : AccessibilityService() {
         mainHandler.removeCallbacksAndMessages(null)
         safeRemoveBall()
         safeRemoveMenu()
+
+        // Release Media3 player resources
+        stopProgressUpdates()
+        player?.release()
+        player = null
+        serviceJob.cancel()
     }
 
     private fun addBallView() {
@@ -375,7 +409,6 @@ class FloatingBallService : AccessibilityService() {
         }
 
         // Handle ALL_TOOLS unmapped elements check if available
-        // Note: Assuming global reference structure matches your main screen definitions
         try {
             val toolsField = Class.forName("com.example.assistive.MainScreenKt").getDeclaredField("ALL_TOOLS")
             toolsField.isAccessible = true
@@ -391,18 +424,19 @@ class FloatingBallService : AccessibilityService() {
                 }
             }
         } catch (e: Exception) {
-            // Fallback gracefully if reflection reference names are handled in local file scopes
+            // Fallback gracefully
         }
 
         activeResIds.add(R.id.btn_close)
         val pages = activeResIds.chunked(6)
+        val totalPagesCount = pages.size + 1
 
         viewPager.adapter = MenuPagerAdapter(pages, actionMap)
 
         viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
-                pageIndicator.text = "${position + 1} / ${pages.size}"
-                pageIndicator.visibility = if (pages.size > 1) View.VISIBLE else View.GONE
+                pageIndicator.text = "${position + 1} / $totalPagesCount"
+                pageIndicator.visibility = if (totalPagesCount > 1) View.VISIBLE else View.GONE
             }
         })
 
@@ -452,50 +486,440 @@ class FloatingBallService : AccessibilityService() {
         }
     }
 
-    private class MenuPagerAdapter(
-        private val pages: List<List<Int>>,
-        private val actions: Map<Int, () -> Unit>
-    ) : RecyclerView.Adapter<MenuPagerAdapter.PageViewHolder>() {
-
-        class PageViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-            val gridLayout: GridLayout = view.findViewById(R.id.page_grid)
-        }
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PageViewHolder {
-            val view = LayoutInflater.from(parent.context).inflate(R.layout.floating_menu_page, parent, false)
-            return PageViewHolder(view)
-        }
-
-        override fun onBindViewHolder(holder: PageViewHolder, position: Int) {
-            holder.gridLayout.removeAllViews()
-
-            val context = holder.itemView.context
-            val density = context.resources.displayMetrics.density
-            val widthPx  = (90 * density).toInt()
-            val heightPx = (60 * density).toInt()
-            val marginPx = (4  * density).toInt()
-
-            val inflater = LayoutInflater.from(context)
-            val fullTemplate = inflater.inflate(R.layout.floating_menu_page, null) as ViewGroup
-            val targetedGrid = fullTemplate.findViewById<GridLayout>(R.id.page_grid)
-
-            pages[position].forEach { resId ->
-                val button = targetedGrid.findViewById<View>(resId)
-                if (button != null) {
-                    targetedGrid.removeView(button)
-                    button.visibility = View.VISIBLE
-                    button.setOnClickListener { actions[resId]?.invoke() }
-
-                    val params = GridLayout.LayoutParams().apply {
-                        width  = widthPx
-                        height = heightPx
-                        setMargins(marginPx, marginPx, marginPx, marginPx)
+    // --- Media3 ExoPlayer Controls ---
+    private fun initPlayer() {
+        if (player == null) {
+            player = ExoPlayer.Builder(this).build().apply {
+                repeatMode = Player.REPEAT_MODE_ALL
+                addListener(object : Player.Listener {
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        updatePlayerUI()
                     }
-                    holder.gridLayout.addView(button, params)
+                    override fun onIsPlayingChanged(isPlaying: Boolean) {
+                        updatePlayerUI()
+                        if (isPlaying) {
+                            startProgressUpdates()
+                        } else {
+                            stopProgressUpdates()
+                        }
+                    }
+                    override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                        val currentIdx = currentMediaItemIndex
+                        if (currentIdx >= 0 && currentIdx < audioList.size) {
+                            currentTrackIndex = currentIdx
+                        }
+                        updatePlayerUI()
+                    }
+                })
+            }
+        }
+    }
+
+    private fun scanLocalSongs() {
+        serviceScope.launch {
+            // Fetch grouped system folder directory configurations asynchronously
+            folderList = FolderModel.scanLocalFolders(this@FloatingBallService)
+            
+            // Default safe baseline fallback setup (Load the first folder's track items initially)
+            if (folderList.isNotEmpty()) {
+                audioList = folderList[0].songs
+                loadMediaItems()
+            }
+        }
+    }
+
+    private fun loadMediaItems() {
+        player?.let { p ->
+            p.clearMediaItems()
+            audioList.forEach { song ->
+                p.addMediaItem(MediaItem.fromUri(song.uri))
+            }
+            p.prepare()
+        }
+    }
+
+    private fun togglePlayPause() {
+        val p = player ?: return
+        if (p.isPlaying) {
+            p.pause()
+        } else {
+            if (audioList.isNotEmpty()) {
+                if (currentTrackIndex == -1) {
+                    currentTrackIndex = 0
+                    p.seekTo(0, 0)
                 }
+                p.play()
+            }
+        }
+    }
+
+    private fun playNext() {
+        val p = player ?: return
+        if (p.hasNextMediaItem()) {
+            p.seekToNext()
+        } else if (audioList.isNotEmpty()) {
+            p.seekTo(0, 0)
+        }
+        p.play()
+    }
+
+    private fun playTrack(index: Int) {
+        val p = player ?: return
+        if (index >= 0 && index < audioList.size) {
+            currentTrackIndex = index
+            p.seekTo(index, 0)
+            p.play()
+            updatePlayerUI()
+        }
+    }
+
+    private fun startProgressUpdates() {
+        progressJob?.cancel()
+        progressJob = serviceScope.launch {
+            while (true) {
+                updateProgressUI()
+                delay(500)
+            }
+        }
+    }
+
+    private fun stopProgressUpdates() {
+        progressJob?.cancel()
+        progressJob = null
+    }
+
+    private var isUserTrackingSeekBar = false
+
+    private fun formatTime(ms: Long): String {
+        if (ms < 0) return "0:00"
+        val totalSeconds = ms / 1000
+        val minutes = totalSeconds / 60
+        val seconds = totalSeconds % 60
+        return String.format(java.util.Locale.US, "%d:%02d", minutes, seconds)
+    }
+
+    private fun updateProgressUI() {
+        val p = player ?: return
+        val holder = activeMusicViewHolder
+        if (holder == null) {
+            stopProgressUpdates()
+            return
+        }
+        val duration = p.duration
+        val position = p.currentPosition
+        
+        holder.txtCurrentTime.text = formatTime(position)
+        holder.txtTotalDuration.text = if (duration > 0) formatTime(duration) else "0:00"
+
+        if (!isUserTrackingSeekBar && duration > 0) {
+            holder.playerSeekBar.progress = ((position * 100) / duration).toInt()
+        } else if (!isUserTrackingSeekBar) {
+            holder.playerSeekBar.progress = 0
+        }
+    }
+
+    private fun updatePlayerUI() {
+        val holder = activeMusicViewHolder ?: return
+        val p = player ?: return
+
+        // Update Play/Pause button graphic state
+        if (p.isPlaying) {
+            holder.btnPlayPause.setImageResource(R.drawable.ic_pause)
+        } else {
+            holder.btnPlayPause.setImageResource(R.drawable.ic_play)
+        }
+
+        // Update Shuffle Button Highlight State
+        if (p.shuffleModeEnabled) {
+            holder.btnShuffle.setColorFilter(android.graphics.Color.parseColor("#FFFFFF"))
+        } else {
+            holder.btnShuffle.setColorFilter(android.graphics.Color.parseColor("#88FFFFFF"))
+        }
+
+        // Update track titles and details
+        if (audioList.isNotEmpty() && currentTrackIndex >= 0 && currentTrackIndex < audioList.size) {
+            val track = audioList[currentTrackIndex]
+            holder.txtTrackTitle.text = track.title
+            holder.txtTrackArtist.text = track.artist
+        } else {
+            holder.txtTrackTitle.text = "No Song Selected"
+            holder.txtTrackArtist.text = "Unknown Artist"
+        }
+
+        updateProgressUI()
+    }
+
+    private fun setupMusicPage(holder: MusicViewHolder) {
+        activeMusicViewHolder = holder
+
+        holder.layoutPlayer.visibility = View.VISIBLE
+        holder.layoutPlaylist.visibility = View.GONE
+
+        // Initialize our unified layout adapter engine matching handlers
+        lateinit var unifiedAdapter: PlaylistAdapter
+        unifiedAdapter = PlaylistAdapter(
+            onFolderClicked = { selectedFolder ->
+                // 1. User tapped a folder! Swapping actively playing queue context cleanly
+                audioList = selectedFolder.songs
+                loadMediaItems() // Loads tracks into ExoPlayer internally
+                
+                // 2. Feed nested song lists into the recycler layout display view
+                unifiedAdapter.setSongs(audioList)
+            },
+            onSongClicked = { selectedSongIndex ->
+                // User tapped a song inside that folder! Trigger track playback execution state loop
+                playTrack(selectedSongIndex)
+                
+                // Collapse panel interface straight back out to main active music overlay frame cleanly
+                holder.layoutPlaylist.visibility = View.GONE
+                holder.layoutPlayer.visibility = View.VISIBLE
+            }
+        )
+
+        holder.playlistRecycler.layoutManager = LinearLayoutManager(this@FloatingBallService)
+        holder.playlistRecycler.adapter = unifiedAdapter
+
+        // Playlist panel access toggle button
+        holder.btnPlaylistToggle.setOnClickListener {
+            holder.layoutPlayer.visibility = View.GONE
+            holder.layoutPlaylist.visibility = View.VISIBLE
+
+            if (folderList.isEmpty()) {
+                holder.txtEmptyPlaylist.visibility = View.VISIBLE
+                holder.playlistRecycler.visibility = View.GONE
+            } else {
+                holder.txtEmptyPlaylist.visibility = View.GONE
+                holder.playlistRecycler.visibility = View.VISIBLE
+                
+                // Always launch with high-level folder list layout first
+                unifiedAdapter.setFolders(folderList)
             }
         }
 
-        override fun getItemCount(): Int = pages.size
+        // Dynamic Multi-Level Back Button Interception Action
+        holder.btnPlaylistBack.setOnClickListener {
+            if (!unifiedAdapter.isDisplayingFolders) {
+                // If viewing tracks inside a directory, drop back to the top-level folders listing
+                unifiedAdapter.setFolders(folderList)
+            } else {
+                // If already at folders index level, completely return to the main overlay widget panel
+                holder.layoutPlaylist.visibility = View.GONE
+                holder.layoutPlayer.visibility = View.VISIBLE
+            }
+        }
+
+        // play controls
+        holder.btnPlayPause.setOnClickListener {
+            togglePlayPause()
+        }
+
+        holder.btnNext.setOnClickListener {
+            playNext()
+        }
+
+        holder.btnShuffle.setOnClickListener {
+            player?.let { p ->
+                p.shuffleModeEnabled = !p.shuffleModeEnabled
+                updatePlayerUI()
+            }
+        }
+
+        holder.playerSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    player?.let { p ->
+                        val estimatedTime = (progress * p.duration) / 100
+                        holder.txtCurrentTime.text = formatTime(estimatedTime)
+                    }
+                }
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {
+                isUserTrackingSeekBar = true
+            }
+
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                val p = player ?: return
+                seekBar?.let { sb ->
+                    if (p.duration > 0) {
+                        val seekTargetMs = (sb.progress.toLong() * p.duration) / 100
+                        p.seekTo(seekTargetMs)
+                    }
+                }
+                isUserTrackingSeekBar = false
+                updateProgressUI()
+            }
+        })
+
+        // Refresh dynamic UI elements
+        updatePlayerUI()
+
+        // Sync local running progress callbacks
+        if (player?.isPlaying == true) {
+            startProgressUpdates()
+        } else {
+            stopProgressUpdates()
+        }
+    }
+
+    // --- Custom ViewPager2 Adapters ---
+    private inner class MenuPagerAdapter(
+        private val pages: List<List<Int>>,
+        private val actions: Map<Int, () -> Unit>
+    ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+
+        private val VIEW_TYPE_GRID = 0
+        private val VIEW_TYPE_MUSIC = 1
+
+        override fun getItemViewType(position: Int): Int {
+            return if (position < pages.size) VIEW_TYPE_GRID else VIEW_TYPE_MUSIC
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+            val inflater = LayoutInflater.from(parent.context)
+            return if (viewType == VIEW_TYPE_GRID) {
+                val view = inflater.inflate(R.layout.floating_menu_page, parent, false)
+                GridViewHolder(view)
+            } else {
+                val view = inflater.inflate(R.layout.floating_menu_music, parent, false)
+                MusicViewHolder(view)
+            }
+        }
+
+        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+            if (holder is GridViewHolder) {
+                holder.gridLayout.removeAllViews()
+
+                val context = holder.itemView.context
+                val density = context.resources.displayMetrics.density
+                val widthPx  = (90 * density).toInt()
+                val heightPx = (60 * density).toInt()
+                val marginPx = (4  * density).toInt()
+
+                val inflater = LayoutInflater.from(context)
+                val fullTemplate = inflater.inflate(R.layout.floating_menu_page, null) as ViewGroup
+                val targetedGrid = fullTemplate.findViewById<GridLayout>(R.id.page_grid)
+
+                pages[position].forEach { resId ->
+                    val button = targetedGrid.findViewById<View>(resId)
+                    if (button != null) {
+                        targetedGrid.removeView(button)
+                        button.visibility = View.VISIBLE
+                        button.setOnClickListener { actions[resId]?.invoke() }
+
+                        val params = GridLayout.LayoutParams().apply {
+                            width  = widthPx
+                            height = heightPx
+                            setMargins(marginPx, marginPx, marginPx, marginPx)
+                        }
+                        holder.gridLayout.addView(button, params)
+                    }
+                }
+            } else if (holder is MusicViewHolder) {
+                setupMusicPage(holder)
+            }
+        }
+
+        override fun getItemCount(): Int = pages.size + 1
+
+        override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
+            if (holder is MusicViewHolder) {
+                activeMusicViewHolder = null
+            }
+            super.onViewRecycled(holder)
+        }
+    }
+
+    private class GridViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val gridLayout: GridLayout = view.findViewById(R.id.page_grid)
+    }
+
+    private class MusicViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val layoutPlayer: View = view.findViewById(R.id.layout_player)
+        val imgDisc: ImageView = view.findViewById(R.id.img_disc)
+        val txtTrackTitle: TextView = view.findViewById(R.id.txt_track_title)
+        val txtTrackArtist: TextView = view.findViewById(R.id.txt_track_artist)
+        val playerSeekBar: SeekBar = view.findViewById(R.id.player_seekbar)
+        val txtCurrentTime: TextView = view.findViewById(R.id.txt_current_time)
+        val txtTotalDuration: TextView = view.findViewById(R.id.txt_total_duration)
+        val btnPlaylistToggle: ImageButton = view.findViewById(R.id.btn_playlist_toggle)
+        val btnPlayPause: ImageButton = view.findViewById(R.id.btn_play_pause)
+        val btnNext: ImageButton = view.findViewById(R.id.btn_next)
+        val btnShuffle: ImageButton = view.findViewById(R.id.btn_shuffle)
+
+        val layoutPlaylist: View = view.findViewById(R.id.layout_playlist)
+        val btnPlaylistBack: ImageButton = view.findViewById(R.id.btn_playlist_back)
+        val playlistRecycler: RecyclerView = view.findViewById(R.id.playlist_recycler)
+        val txtEmptyPlaylist: TextView = view.findViewById(R.id.txt_empty_playlist)
+    }
+
+    // --- Playlist RecyclerView Adapter ---
+    private class PlaylistAdapter(
+        private val onFolderClicked: (FolderModel) -> Unit,
+        private val onSongClicked: (Int) -> Unit
+    ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+
+        private val TYPE_FOLDER = 0
+        private val TYPE_SONG = 1
+
+        private var currentFolders = listOf<FolderModel>()
+        private var currentSongs = listOf<AudioModel>()
+        var isDisplayingFolders = true
+            private set
+
+        fun setFolders(folders: List<FolderModel>) {
+            this.currentFolders = folders
+            this.isDisplayingFolders = true
+            notifyDataSetChanged()
+        }
+
+        fun setSongs(songs: List<AudioModel>) {
+            this.currentSongs = songs
+            this.isDisplayingFolders = false
+            notifyDataSetChanged()
+        }
+
+        override fun getItemViewType(position: Int): Int {
+            return if (isDisplayingFolders) TYPE_FOLDER else TYPE_SONG
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+            val inflater = LayoutInflater.from(parent.context)
+            return if (viewType == TYPE_FOLDER) {
+                val view = inflater.inflate(R.layout.folder_item, parent, false)
+                FolderViewHolder(view)
+            } else {
+                val view = inflater.inflate(R.layout.playlist_item, parent, false)
+                SongViewHolder(view)
+            }
+        }
+
+        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+            if (holder is FolderViewHolder) {
+                val folder = currentFolders[position]
+                holder.name.text = folder.name
+                holder.count.text = "${folder.songs.size} tracks"
+                holder.itemView.setOnClickListener { onFolderClicked(folder) }
+            } else if (holder is SongViewHolder) {
+                val song = currentSongs[position]
+                holder.title.text = song.title
+                holder.artist.text = song.artist
+                holder.itemView.setOnClickListener { onSongClicked(position) }
+            }
+        }
+
+        override fun getItemCount(): Int {
+            return if (isDisplayingFolders) currentFolders.size else currentSongs.size
+        }
+
+        class FolderViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+            val name: TextView = view.findViewById(R.id.txt_folder_name)
+            val count: TextView = view.findViewById(R.id.txt_folder_count)
+        }
+
+        class SongViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+            val title: TextView = view.findViewById(R.id.txt_item_title)
+            val artist: TextView = view.findViewById(R.id.txt_item_artist)
+        }
     }
 }

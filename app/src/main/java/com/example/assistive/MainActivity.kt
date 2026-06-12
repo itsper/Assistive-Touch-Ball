@@ -1,7 +1,9 @@
 package com.example.assistive
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -10,11 +12,14 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import com.example.assistive.ui.theme.AssistiveTheme
 
 class MainActivity : ComponentActivity() {
 
     private val overlayPermissionReqCode = 1234
+    private val storagePermissionReqCode = 5678
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,6 +32,23 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    private fun hasStoragePermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_AUDIO) == PackageManager.PERMISSION_GRANTED
+        } else {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun requestStoragePermission() {
+        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_AUDIO
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        ActivityCompat.requestPermissions(this, arrayOf(permission), storagePermissionReqCode)
     }
 
     private fun checkPermissionsThenGuide() {
@@ -64,7 +86,12 @@ class MainActivity : ComponentActivity() {
                 ).show()
             }
 
-            // Step 3: Check if the AccessibilityService is already running
+            // Step 3: Storage permission (required to load local audio files)
+            !hasStoragePermission() -> {
+                requestStoragePermission()
+            }
+
+            // Step 4: Check if the AccessibilityService is already running
             isAccessibilityServiceEnabled() -> {
                 Toast.makeText(
                     this,
@@ -128,6 +155,21 @@ class MainActivity : ComponentActivity() {
                 checkPermissionsThenGuide()
             } else {
                 Toast.makeText(this, "Overlay permission is required", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == storagePermissionReqCode) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                checkPermissionsThenGuide()
+            } else {
+                Toast.makeText(this, "Storage permission is required for local music MVP feature", Toast.LENGTH_SHORT).show()
             }
         }
     }
