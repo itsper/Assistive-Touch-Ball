@@ -451,11 +451,38 @@
         <ImageView
             android:layout_width="24dp"
             android:layout_height="24dp"
-            android:src="@drawable/music" />
+            android:src="@drawable/ic_music" />
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Music"
+            android:textColor="#FFFFFFFF"
+            android:textSize="10sp"
+            android:layout_marginTop="2dp"
+            android:fontFamily="sans-serif-medium"/>
+    </LinearLayout>
+
+    <!-- VIDEO PLAYER -->
+    <LinearLayout
+        android:id="@+id/btn_video"
+        android:layout_width="90dp"
+        android:layout_height="60dp"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="@drawable/btn_item_bg"
+        android:clickable="true"
+        android:focusable="true"
+        android:layout_margin="4dp"
+        android:visibility="gone">
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_video"
+            android:tint="#FFFFFFFF"/>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Video"
             android:textColor="#FFFFFFFF"
             android:textSize="10sp"
             android:layout_marginTop="2dp"

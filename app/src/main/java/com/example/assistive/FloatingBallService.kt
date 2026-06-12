@@ -29,6 +29,7 @@ import androidx.viewpager2.widget.ViewPager2
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import kotlin.math.abs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -62,6 +63,16 @@ class FloatingBallService : AccessibilityService() {
     private var audioList = listOf<AudioModel>()   // Tracks actively playing folder list contents
     private var currentTrackIndex = -1
     private var activeMusicViewHolder: MusicViewHolder? = null
+
+    // Video player & coroutine variables
+    private var videoPlayer: ExoPlayer? = null
+    private var videoFolderList = listOf<VideoFolderModel>()
+    private var allVideosList = listOf<VideoModel>()
+    private var videoList = listOf<VideoModel>()
+    private var currentVideoIndex = -1
+    private var activeVideoViewHolder: VideoViewHolder? = null
+    private var videoProgressJob: Job? = null
+    private var isUserTrackingVideoSeekBar = false
 
     private val serviceJob = Job()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
@@ -137,6 +148,8 @@ class FloatingBallService : AccessibilityService() {
         // Initialize player and scan files
         initPlayer()
         scanLocalSongs()
+        initVideoPlayer()
+        scanLocalVideos()
     }
 
     // --- UPGRADED TO HANDLE THE CHARACTER SKIN UPDATES LIVE ---
@@ -201,6 +214,11 @@ class FloatingBallService : AccessibilityService() {
         stopProgressUpdates()
         player?.release()
         player = null
+
+        stopVideoProgressUpdates()
+        videoPlayer?.release()
+        videoPlayer = null
+
         serviceJob.cancel()
     }
 
@@ -371,6 +389,12 @@ class FloatingBallService : AccessibilityService() {
         map[R.id.btn_music] = {
             val adapter = viewPager.adapter
             if (adapter != null) {
+                viewPager.setCurrentItem(adapter.itemCount - 2, true)
+            }
+        }
+        map[R.id.btn_video] = {
+            val adapter = viewPager.adapter
+            if (adapter != null) {
                 viewPager.setCurrentItem(adapter.itemCount - 1, true)
             }
         }
@@ -381,7 +405,7 @@ class FloatingBallService : AccessibilityService() {
 
     private fun showMenu() {
         val prefs = getSharedPreferences("AssistivePrefs", Context.MODE_PRIVATE)
-        val defaultOrder = "btn_home,btn_back,btn_recents,btn_screenshot,btn_volume,btn_flashlight,btn_notification,btn_brightness,btn_rotate,btn_wifi,btn_data,btn_bluetooth,btn_airplane,btn_hotspot,btn_onehanded,btn_music"
+        val defaultOrder = "btn_home,btn_back,btn_recents,btn_screenshot,btn_volume,btn_flashlight,btn_notification,btn_brightness,btn_rotate,btn_wifi,btn_data,btn_bluetooth,btn_airplane,btn_hotspot,btn_onehanded,btn_music,btn_video"
         val savedOrder = prefs.getString("tool_order", defaultOrder) ?: defaultOrder
         val orderedKeys = savedOrder.split(",").filter { it.isNotEmpty() }
 
@@ -401,7 +425,8 @@ class FloatingBallService : AccessibilityService() {
             "btn_airplane"     to R.id.btn_airplane,
             "btn_hotspot"      to R.id.btn_hotspot,
             "btn_onehanded"    to R.id.btn_onehanded,
-            "btn_music"        to R.id.btn_music
+            "btn_music"        to R.id.btn_music,
+            "btn_video"        to R.id.btn_video
         )
 
         val activeResIds = mutableListOf<Int>()
@@ -430,7 +455,7 @@ class FloatingBallService : AccessibilityService() {
 
         activeResIds.add(R.id.btn_close)
         val pages = activeResIds.chunked(6)
-        val totalPagesCount = pages.size + 1
+        val totalPagesCount = pages.size + 2
 
         viewPager.adapter = MenuPagerAdapter(pages, actionMap)
 
@@ -528,6 +553,20 @@ class FloatingBallService : AccessibilityService() {
             if (allSongsList.isNotEmpty()) {
                 audioList = allSongsList
                 loadMediaItems()
+            }
+            updatePlayerUI()
+
+            // Refresh UI and list if currently displaying empty state
+            activeMusicViewHolder?.let { holder ->
+                if (allSongsList.isNotEmpty()) {
+                    holder.txtEmptyPlaylist.visibility = View.GONE
+                    holder.playlistRecycler.visibility = View.VISIBLE
+                    val adapter = holder.playlistRecycler.adapter as? PlaylistAdapter
+                    adapter?.setFoldersAndAllSongs(folderList, allSongsList)
+                } else {
+                    holder.txtEmptyPlaylist.visibility = View.VISIBLE
+                    holder.playlistRecycler.visibility = View.GONE
+                }
             }
         }
     }
@@ -693,6 +732,13 @@ class FloatingBallService : AccessibilityService() {
         holder.playlistRecycler.layoutManager = LinearLayoutManager(this@FloatingBallService)
         holder.playlistRecycler.adapter = unifiedAdapter
 
+        // Bind scan button in empty playlist view
+        holder.txtEmptyPlaylist.findViewById<View>(R.id.btn_scan_music)?.setOnClickListener {
+            Toast.makeText(this@FloatingBallService, "Scanning media files...", Toast.LENGTH_SHORT).show()
+            scanLocalSongs()
+            scanLocalVideos()
+        }
+
         // Playlist panel access toggle button
         holder.btnPlaylistToggle.setOnClickListener {
             holder.layoutPlayer.visibility = View.GONE
@@ -779,6 +825,358 @@ class FloatingBallService : AccessibilityService() {
         }
     }
 
+    // --- Media3 Video ExoPlayer Controls ---
+    private fun initVideoPlayer() {
+        if (videoPlayer == null) {
+            videoPlayer = ExoPlayer.Builder(this).build().apply {
+                repeatMode = Player.REPEAT_MODE_ALL
+                addListener(object : Player.Listener {
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        updateVideoPlayerUI()
+                    }
+                    override fun onIsPlayingChanged(isPlaying: Boolean) {
+                        updateVideoPlayerUI()
+                        if (isPlaying) {
+                            startVideoProgressUpdates()
+                        } else {
+                            stopVideoProgressUpdates()
+                        }
+                    }
+                    override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                        val currentIdx = currentMediaItemIndex
+                        if (currentIdx >= 0 && currentIdx < videoList.size) {
+                            currentVideoIndex = currentIdx
+                        }
+                        updateVideoPlayerUI()
+                    }
+                })
+            }
+        }
+    }
+
+    private fun scanLocalVideos() {
+        serviceScope.launch {
+            allVideosList = VideoModel.scanLocalVideoFiles(this@FloatingBallService)
+            videoFolderList = VideoFolderModel.scanLocalFolders(this@FloatingBallService)
+            if (allVideosList.isNotEmpty()) {
+                videoList = allVideosList
+                loadVideoMediaItems()
+            }
+            updateVideoPlayerUI()
+
+            // Refresh UI and list if currently displaying empty state
+            activeVideoViewHolder?.let { holder ->
+                if (allVideosList.isNotEmpty()) {
+                    holder.txtEmptyPlaylist.visibility = View.GONE
+                    holder.playlistRecycler.visibility = View.VISIBLE
+                    val adapter = holder.playlistRecycler.adapter as? VideoPlaylistAdapter
+                    adapter?.setFoldersAndAllVideos(videoFolderList, allVideosList)
+                } else {
+                    holder.txtEmptyPlaylist.visibility = View.VISIBLE
+                    holder.playlistRecycler.visibility = View.GONE
+                }
+            }
+        }
+    }
+
+    private fun loadVideoMediaItems() {
+        videoPlayer?.let { p ->
+            p.clearMediaItems()
+            videoList.forEach { video ->
+                p.addMediaItem(MediaItem.fromUri(video.uri))
+            }
+            p.prepare()
+        }
+    }
+
+    private fun toggleVideoPlayPause() {
+        val p = videoPlayer ?: return
+        if (p.isPlaying) {
+            p.pause()
+        } else {
+            if (videoList.isNotEmpty()) {
+                if (currentVideoIndex == -1) {
+                    currentVideoIndex = 0
+                    p.seekTo(0, 0)
+                }
+                p.play()
+            }
+        }
+    }
+
+    private fun playVideoNext() {
+        val p = videoPlayer ?: return
+        if (p.hasNextMediaItem()) {
+            p.seekToNext()
+        } else if (videoList.isNotEmpty()) {
+            p.seekTo(0, 0)
+        }
+        p.play()
+    }
+
+    private fun playVideo(index: Int) {
+        val p = videoPlayer ?: return
+        if (index >= 0 && index < videoList.size) {
+            currentVideoIndex = index
+            p.seekTo(index, 0)
+            p.play()
+            updateVideoPlayerUI()
+        }
+    }
+
+    private fun startVideoProgressUpdates() {
+        videoProgressJob?.cancel()
+        videoProgressJob = serviceScope.launch {
+            while (true) {
+                updateVideoProgressUI()
+                delay(500)
+            }
+        }
+    }
+
+    private fun stopVideoProgressUpdates() {
+        videoProgressJob?.cancel()
+        videoProgressJob = null
+    }
+
+    private fun updateVideoProgressUI() {
+        val p = videoPlayer ?: return
+        val holder = activeVideoViewHolder
+        if (holder == null) {
+            stopVideoProgressUpdates()
+            return
+        }
+        val duration = p.duration
+        val position = p.currentPosition
+        
+        holder.txtCurrentTime.text = formatTime(position)
+        holder.txtTotalDuration.text = if (duration > 0) formatTime(duration) else "0:00"
+
+        if (!isUserTrackingVideoSeekBar && duration > 0) {
+            holder.playerSeekBar.progress = ((position * 100) / duration).toInt()
+        } else if (!isUserTrackingVideoSeekBar) {
+            holder.playerSeekBar.progress = 0
+        }
+    }
+
+    private fun updateVideoPlayerUI() {
+        val holder = activeVideoViewHolder ?: return
+        val p = videoPlayer ?: return
+
+        if (p.isPlaying) {
+            holder.btnPlayPause.setImageResource(R.drawable.ic_pause)
+        } else {
+            holder.btnPlayPause.setImageResource(R.drawable.ic_play)
+        }
+
+        if (videoList.isNotEmpty() && currentVideoIndex >= 0 && currentVideoIndex < videoList.size) {
+            val video = videoList[currentVideoIndex]
+            holder.txtVideoTitle.text = video.title
+        } else {
+            holder.txtVideoTitle.text = "No Video Selected"
+        }
+
+        updateVideoProgressUI()
+    }
+
+    private fun setupVideoPage(holder: VideoViewHolder) {
+        activeVideoViewHolder = holder
+
+        holder.layoutPlayer.visibility = View.VISIBLE
+        holder.layoutPlaylist.visibility = View.GONE
+
+        // Bind PlayerView to Player instance
+        holder.playerView.player = videoPlayer
+
+        lateinit var videoAdapter: VideoPlaylistAdapter
+        videoAdapter = VideoPlaylistAdapter(
+            onFolderClicked = { selectedFolder ->
+                videoList = selectedFolder.videos
+                loadVideoMediaItems()
+                videoAdapter.setVideos(videoList)
+            },
+            onVideoClicked = { selectedVideoIndex ->
+                playVideo(selectedVideoIndex)
+                holder.layoutPlaylist.visibility = View.GONE
+                holder.layoutPlayer.visibility = View.VISIBLE
+            },
+            onAllVideoClicked = { allVideoIndex ->
+                videoList = allVideosList
+                loadVideoMediaItems()
+                playVideo(allVideoIndex)
+                holder.layoutPlaylist.visibility = View.GONE
+                holder.layoutPlayer.visibility = View.VISIBLE
+            }
+        )
+
+        holder.playlistRecycler.layoutManager = LinearLayoutManager(this@FloatingBallService)
+        holder.playlistRecycler.adapter = videoAdapter
+
+        // Bind scan button in empty playlist view
+        holder.txtEmptyPlaylist.findViewById<View>(R.id.btn_scan_video)?.setOnClickListener {
+            Toast.makeText(this@FloatingBallService, "Scanning media files...", Toast.LENGTH_SHORT).show()
+            scanLocalSongs()
+            scanLocalVideos()
+        }
+
+        holder.btnPlaylistToggle.setOnClickListener {
+            holder.layoutPlayer.visibility = View.GONE
+            holder.layoutPlaylist.visibility = View.VISIBLE
+
+            if (videoFolderList.isEmpty() && allVideosList.isEmpty()) {
+                holder.txtEmptyPlaylist.visibility = View.VISIBLE
+                holder.playlistRecycler.visibility = View.GONE
+            } else {
+                holder.txtEmptyPlaylist.visibility = View.GONE
+                holder.playlistRecycler.visibility = View.VISIBLE
+                videoAdapter.setFoldersAndAllVideos(videoFolderList, allVideosList)
+            }
+        }
+
+        holder.btnPlaylistBack.setOnClickListener {
+            if (!videoAdapter.isDisplayingFolders) {
+                videoAdapter.setFoldersAndAllVideos(videoFolderList, allVideosList)
+            } else {
+                holder.layoutPlaylist.visibility = View.GONE
+                holder.layoutPlayer.visibility = View.VISIBLE
+            }
+        }
+
+        holder.btnPlayPause.setOnClickListener {
+            toggleVideoPlayPause()
+        }
+
+        holder.btnNext.setOnClickListener {
+            playVideoNext()
+        }
+
+        holder.playerSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    videoPlayer?.let { p ->
+                        val estimatedTime = (progress * p.duration) / 100
+                        holder.txtCurrentTime.text = formatTime(estimatedTime)
+                    }
+                }
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {
+                isUserTrackingVideoSeekBar = true
+            }
+
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                val p = videoPlayer ?: return
+                seekBar?.let { sb ->
+                    if (p.duration > 0) {
+                        val seekTargetMs = (sb.progress.toLong() * p.duration) / 100
+                        p.seekTo(seekTargetMs)
+                    }
+                }
+                isUserTrackingVideoSeekBar = false
+                updateVideoProgressUI()
+            }
+        })
+
+        updateVideoPlayerUI()
+
+        if (videoPlayer?.isPlaying == true) {
+            startVideoProgressUpdates()
+        } else {
+            stopVideoProgressUpdates()
+        }
+    }
+
+    // --- Video Playlist RecyclerView Adapter ---
+    private class VideoPlaylistAdapter(
+        private val onFolderClicked: (VideoFolderModel) -> Unit,
+        private val onVideoClicked: (Int) -> Unit,
+        private val onAllVideoClicked: (Int) -> Unit
+    ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+
+        private val TYPE_FOLDER = 0
+        private val TYPE_VIDEO = 1
+
+        private var currentFolders = listOf<VideoFolderModel>()
+        private var allVideos = listOf<VideoModel>()
+        private var folderVideos = listOf<VideoModel>()
+        var isDisplayingFolders = true
+            private set
+
+        fun setFoldersAndAllVideos(folders: List<VideoFolderModel>, allVideos: List<VideoModel>) {
+            this.currentFolders = folders
+            this.allVideos = allVideos
+            this.isDisplayingFolders = true
+            notifyDataSetChanged()
+        }
+
+        fun setVideos(videos: List<VideoModel>) {
+            this.folderVideos = videos
+            this.isDisplayingFolders = false
+            notifyDataSetChanged()
+        }
+
+        override fun getItemViewType(position: Int): Int {
+            if (isDisplayingFolders) {
+                return if (position < currentFolders.size) TYPE_FOLDER else TYPE_VIDEO
+            }
+            return TYPE_VIDEO
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+            val inflater = LayoutInflater.from(parent.context)
+            return if (viewType == TYPE_FOLDER) {
+                val view = inflater.inflate(R.layout.folder_item, parent, false)
+                PlaylistAdapter.FolderViewHolder(view)
+            } else {
+                val view = inflater.inflate(R.layout.video_item, parent, false)
+                VideoItemViewHolder(view)
+            }
+        }
+
+        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+            if (holder is PlaylistAdapter.FolderViewHolder) {
+                val folder = currentFolders[position]
+                holder.name.text = folder.name
+                holder.count.text = "${folder.videos.size} videos"
+                holder.itemView.setOnClickListener { onFolderClicked(folder) }
+            } else if (holder is VideoItemViewHolder) {
+                if (isDisplayingFolders) {
+                    val videoIndex = position - currentFolders.size
+                    val video = allVideos[videoIndex]
+                    holder.title.text = video.title
+                    holder.duration.text = formatVideoTime(video.duration)
+                    holder.itemView.setOnClickListener { onAllVideoClicked(videoIndex) }
+                } else {
+                    val video = folderVideos[position]
+                    holder.title.text = video.title
+                    holder.duration.text = formatVideoTime(video.duration)
+                    holder.itemView.setOnClickListener { onVideoClicked(position) }
+                }
+            }
+        }
+
+        private fun formatVideoTime(ms: Long): String {
+            if (ms < 0) return "0:00"
+            val totalSeconds = ms / 1000
+            val minutes = totalSeconds / 60
+            val seconds = totalSeconds % 60
+            return String.format(java.util.Locale.US, "%d:%02d", minutes, seconds)
+        }
+
+        override fun getItemCount(): Int {
+            return if (isDisplayingFolders) {
+                currentFolders.size + allVideos.size
+            } else {
+                folderVideos.size
+            }
+        }
+
+        class VideoItemViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+            val title: TextView = view.findViewById(R.id.txt_video_item_title)
+            val duration: TextView = view.findViewById(R.id.txt_video_item_duration)
+        }
+    }
+
     // --- Custom ViewPager2 Adapters ---
     private inner class MenuPagerAdapter(
         private val pages: List<List<Int>>,
@@ -787,19 +1185,36 @@ class FloatingBallService : AccessibilityService() {
 
         private val VIEW_TYPE_GRID = 0
         private val VIEW_TYPE_MUSIC = 1
+        private val VIEW_TYPE_VIDEO = 2
 
         override fun getItemViewType(position: Int): Int {
-            return if (position < pages.size) VIEW_TYPE_GRID else VIEW_TYPE_MUSIC
+            return when (position) {
+                in 0 until pages.size -> VIEW_TYPE_GRID
+                pages.size -> VIEW_TYPE_MUSIC
+                pages.size + 1 -> VIEW_TYPE_VIDEO
+                else -> VIEW_TYPE_GRID
+            }
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
             val inflater = LayoutInflater.from(parent.context)
-            return if (viewType == VIEW_TYPE_GRID) {
-                val view = inflater.inflate(R.layout.floating_menu_page, parent, false)
-                GridViewHolder(view)
-            } else {
-                val view = inflater.inflate(R.layout.floating_menu_music, parent, false)
-                MusicViewHolder(view)
+            return when (viewType) {
+                VIEW_TYPE_GRID -> {
+                    val view = inflater.inflate(R.layout.floating_menu_page, parent, false)
+                    GridViewHolder(view)
+                }
+                VIEW_TYPE_MUSIC -> {
+                    val view = inflater.inflate(R.layout.floating_menu_music, parent, false)
+                    MusicViewHolder(view)
+                }
+                VIEW_TYPE_VIDEO -> {
+                    val view = inflater.inflate(R.layout.floating_menu_video, parent, false)
+                    VideoViewHolder(view)
+                }
+                else -> {
+                    val view = inflater.inflate(R.layout.floating_menu_page, parent, false)
+                    GridViewHolder(view)
+                }
             }
         }
 
@@ -834,14 +1249,19 @@ class FloatingBallService : AccessibilityService() {
                 }
             } else if (holder is MusicViewHolder) {
                 setupMusicPage(holder)
+            } else if (holder is VideoViewHolder) {
+                setupVideoPage(holder)
             }
         }
 
-        override fun getItemCount(): Int = pages.size + 1
+        override fun getItemCount(): Int = pages.size + 2
 
         override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
             if (holder is MusicViewHolder) {
                 activeMusicViewHolder = null
+            } else if (holder is VideoViewHolder) {
+                activeVideoViewHolder = null
+                holder.playerView.player = null
             }
             super.onViewRecycled(holder)
         }
@@ -867,7 +1287,24 @@ class FloatingBallService : AccessibilityService() {
         val layoutPlaylist: View = view.findViewById(R.id.layout_playlist)
         val btnPlaylistBack: ImageButton = view.findViewById(R.id.btn_playlist_back)
         val playlistRecycler: RecyclerView = view.findViewById(R.id.playlist_recycler)
-        val txtEmptyPlaylist: TextView = view.findViewById(R.id.txt_empty_playlist)
+        val txtEmptyPlaylist: View = view.findViewById(R.id.txt_empty_playlist)
+    }
+
+    private class VideoViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val layoutPlayer: View = view.findViewById(R.id.layout_video_player)
+        val playerView: PlayerView = view.findViewById(R.id.video_player_view)
+        val txtVideoTitle: TextView = view.findViewById(R.id.txt_video_title)
+        val playerSeekBar: SeekBar = view.findViewById(R.id.video_seekbar)
+        val txtCurrentTime: TextView = view.findViewById(R.id.txt_video_current_time)
+        val txtTotalDuration: TextView = view.findViewById(R.id.txt_video_total_duration)
+        val btnPlaylistToggle: ImageButton = view.findViewById(R.id.btn_video_playlist_toggle)
+        val btnPlayPause: ImageButton = view.findViewById(R.id.btn_video_play_pause)
+        val btnNext: ImageButton = view.findViewById(R.id.btn_video_next)
+
+        val layoutPlaylist: View = view.findViewById(R.id.layout_video_playlist)
+        val btnPlaylistBack: ImageButton = view.findViewById(R.id.btn_video_playlist_back)
+        val playlistRecycler: RecyclerView = view.findViewById(R.id.video_playlist_recycler)
+        val txtEmptyPlaylist: View = view.findViewById(R.id.txt_empty_video_playlist)
     }
 
     // --- Playlist RecyclerView Adapter ---

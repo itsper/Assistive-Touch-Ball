@@ -26,7 +26,8 @@ internal val ALL_TOOLS = listOf(
     ToolItem("btn_airplane",     "Airplane Mode", android.R.drawable.ic_menu_agenda, true, Color(0xFF7986CB)),
     ToolItem("btn_hotspot",      "Hotspot",       android.R.drawable.ic_menu_share,  true, Color(0xFFD4E157)),
     ToolItem("btn_onehanded",    "One-Handed",    android.R.drawable.ic_menu_crop,   true, Color(0xFFAED581)),
-    ToolItem("btn_music",        "Music",         R.drawable.music,                  true, Color(0xFFE91E63))
+    ToolItem("btn_music",        "Music",         R.drawable.ic_music,               true, Color(0xFFE91E63)),
+    ToolItem("btn_video",        "Video",         R.drawable.ic_video,               true, Color(0xFFFF5722))
 )
 
 internal const val PREF_ORDER_KEY = "tool_order"
