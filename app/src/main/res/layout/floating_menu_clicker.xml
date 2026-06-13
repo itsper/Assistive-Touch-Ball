@@ -1,0 +1,231 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="8dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <!-- Header with Back Button -->
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="32dp"
+            android:layout_marginBottom="4dp">
+
+            <ImageButton
+                android:id="@+id/btn_clicker_page_back"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_back"
+                android:tint="#FFFFFF"
+                android:background="@drawable/btn_item_bg"
+                android:layout_alignParentStart="true"
+                android:layout_centerVertical="true"
+                android:padding="4dp"
+                android:contentDescription="Back to menu" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Auto Clicker"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:layout_centerInParent="true" />
+        </RelativeLayout>
+
+        <!-- Target Controls: Selected Label + Add Click + Add Swipe + Clear -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="32dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="4dp">
+
+            <TextView
+                android:id="@+id/txt_clicker_target_label"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1.0"
+                android:text="No Target"
+                android:textColor="#88FFFFFF"
+                android:textSize="9sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:background="@drawable/btn_item_bg"
+                android:layout_marginEnd="1dp" />
+
+            <TextView
+                android:id="@+id/btn_clicker_add_target"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="0.8"
+                android:text="+ Click"
+                android:textColor="#FFFFFF"
+                android:textSize="9sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:background="@drawable/btn_item_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:layout_marginHorizontal="1dp" />
+
+            <TextView
+                android:id="@+id/btn_clicker_add_swipe"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="0.9"
+                android:text="+ Swipe"
+                android:textColor="#FFFFFF"
+                android:textSize="9sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:background="@drawable/btn_item_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:layout_marginHorizontal="1dp" />
+
+            <TextView
+                android:id="@+id/btn_clicker_remove_target"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="0.7"
+                android:text="Clear"
+                android:textColor="#FFFFFF"
+                android:textSize="9sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:background="@drawable/btn_item_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:layout_marginStart="1dp" />
+        </LinearLayout>
+
+        <!-- Interval Controls: Minus, Value, Plus -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="32dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/btn_item_bg"
+            android:layout_marginBottom="4dp"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp">
+
+            <TextView
+                android:id="@+id/btn_clicker_interval_minus"
+                android:layout_width="32dp"
+                android:layout_height="match_parent"
+                android:text="-"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <TextView
+                android:id="@+id/txt_clicker_interval"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Interval: 500ms"
+                android:textColor="#FFFFFF"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:gravity="center" />
+
+            <TextView
+                android:id="@+id/btn_clicker_interval_plus"
+                android:layout_width="32dp"
+                android:layout_height="match_parent"
+                android:text="+"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:clickable="true"
+                android:focusable="true" />
+        </LinearLayout>
+
+        <!-- Mode Toggle: Repeat / 1 Time -->
+        <TextView
+            android:id="@+id/btn_clicker_mode_toggle"
+            android:layout_width="match_parent"
+            android:layout_height="32dp"
+            android:text="Cycle Mode: Repeatedly"
+            android:textColor="#FFFFFF"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:background="@drawable/btn_item_bg"
+            android:clickable="true"
+            android:focusable="true"
+            android:layout_marginBottom="4dp" />
+
+        <!-- Stop Duration Controls: Minus, Value, Plus -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="32dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/btn_item_bg"
+            android:layout_marginBottom="4dp"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp">
+
+            <TextView
+                android:id="@+id/btn_clicker_stop_minus"
+                android:layout_width="32dp"
+                android:layout_height="match_parent"
+                android:text="-"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <TextView
+                android:id="@+id/txt_clicker_stop_duration"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Stop: Manually"
+                android:textColor="#FFFFFF"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:gravity="center" />
+
+            <TextView
+                android:id="@+id/btn_clicker_stop_plus"
+                android:layout_width="32dp"
+                android:layout_height="match_parent"
+                android:text="+"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:clickable="true"
+                android:focusable="true" />
+        </LinearLayout>
+
+        <!-- Start / Stop Button -->
+        <TextView
+            android:id="@+id/btn_clicker_start_stop"
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:text="START"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:background="@drawable/btn_item_bg"
+            android:clickable="true"
+            android:focusable="true" />
+
+    </LinearLayout>
+</FrameLayout>

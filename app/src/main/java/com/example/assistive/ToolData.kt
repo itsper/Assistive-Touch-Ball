@@ -28,7 +28,8 @@ internal val ALL_TOOLS = listOf(
     ToolItem("btn_onehanded",    "One-Handed",    android.R.drawable.ic_menu_crop,   true, Color(0xFFAED581)),
     ToolItem("btn_music",        "Music",         R.drawable.ic_music,               true, Color(0xFFE91E63)),
     ToolItem("btn_video",        "Video",         R.drawable.ic_video,               true, Color(0xFFFF5722)),
-    ToolItem("btn_cursor",       "Cursor",        R.drawable.ic_cursor,              true, Color(0xFF9C27B0))
+    ToolItem("btn_cursor",       "Cursor",        R.drawable.ic_cursor,              true, Color(0xFF9C27B0)),
+    ToolItem("btn_clicker",      "Auto Clicker",  R.drawable.ic_clicker,             true, Color(0xFFE040FB))
 )
 
 internal const val PREF_ORDER_KEY = "tool_order"

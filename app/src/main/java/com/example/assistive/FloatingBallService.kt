@@ -79,6 +79,17 @@ class FloatingBallService : AccessibilityService() {
     private var isCursorVisible = false
     private lateinit var cursorParams: WindowManager.LayoutParams
 
+    // Auto Clicker variables
+    private val targetList = mutableListOf<TargetData>()
+    private var selectedTargetId = -1
+    private var clickerJob: Job? = null
+    private var autoClickerIntervalMs = 500L
+    private var autoClickerIsRepeat = true
+    private var isAutoClickerRunning = false
+    private var stopDurationOptionIndex = 0
+    private val stopDurationOptions = listOf(0L, 10000L, 30000L, 60000L, 180000L, 300000L, 600000L)
+    private val stopDurationLabels = listOf("Stop: Manually", "Stop: 10s", "Stop: 30s", "Stop: 1m", "Stop: 3m", "Stop: 5m", "Stop: 10m")
+
     private val serviceJob = Job()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
     private var progressJob: Job? = null
@@ -163,6 +174,7 @@ class FloatingBallService : AccessibilityService() {
         setupMusicPage(musicViewHolder)
         setupVideoPage(videoViewHolder)
         setupTouchpadPage()
+        setupClickerPage()
     }
 
     // --- UPGRADED TO HANDLE THE CHARACTER SKIN UPDATES LIVE ---
@@ -222,6 +234,8 @@ class FloatingBallService : AccessibilityService() {
         mainHandler.removeCallbacksAndMessages(null)
         safeRemoveBall()
         safeRemoveMenu()
+        safeRemoveAllTargets()
+        stopAutoClicker()
 
         // Release Media3 player resources
         stopProgressUpdates()
@@ -567,6 +581,14 @@ class FloatingBallService : AccessibilityService() {
             menuView.findViewById<View>(R.id.layout_cursor_container).visibility = View.VISIBLE
             addCursorView()
         }
+        map[R.id.btn_clicker] = {
+            menuView.findViewById<View>(R.id.layout_menu_buttons).visibility = View.GONE
+            menuView.findViewById<View>(R.id.layout_music_container).visibility = View.GONE
+            menuView.findViewById<View>(R.id.layout_video_container).visibility = View.GONE
+            menuView.findViewById<View>(R.id.layout_cursor_container).visibility = View.GONE
+            menuView.findViewById<View>(R.id.layout_clicker_container).visibility = View.VISIBLE
+            updateClickerMenuUI()
+        }
         map[R.id.btn_close] = { closeMenu() }
 
         actionMap = map
@@ -578,9 +600,10 @@ class FloatingBallService : AccessibilityService() {
         menuView.findViewById<View>(R.id.layout_music_container).visibility = View.GONE
         menuView.findViewById<View>(R.id.layout_video_container).visibility = View.GONE
         menuView.findViewById<View>(R.id.layout_cursor_container).visibility = View.GONE
+        menuView.findViewById<View>(R.id.layout_clicker_container).visibility = View.GONE
 
         val prefs = getSharedPreferences("AssistivePrefs", Context.MODE_PRIVATE)
-        val defaultOrder = "btn_home,btn_back,btn_recents,btn_screenshot,btn_volume,btn_flashlight,btn_notification,btn_brightness,btn_rotate,btn_wifi,btn_data,btn_bluetooth,btn_airplane,btn_hotspot,btn_onehanded,btn_music,btn_video,btn_cursor"
+        val defaultOrder = "btn_home,btn_back,btn_recents,btn_screenshot,btn_volume,btn_flashlight,btn_notification,btn_brightness,btn_rotate,btn_wifi,btn_data,btn_bluetooth,btn_airplane,btn_hotspot,btn_onehanded,btn_music,btn_video,btn_cursor,btn_clicker"
         val savedOrder = prefs.getString("tool_order", defaultOrder) ?: defaultOrder
         val orderedKeys = savedOrder.split(",").filter { it.isNotEmpty() }
 
@@ -602,7 +625,8 @@ class FloatingBallService : AccessibilityService() {
             "btn_onehanded"    to R.id.btn_onehanded,
             "btn_music"        to R.id.btn_music,
             "btn_video"        to R.id.btn_video,
-            "btn_cursor"       to R.id.btn_cursor
+            "btn_cursor"       to R.id.btn_cursor,
+            "btn_clicker"      to R.id.btn_clicker
         )
 
         val activeResIds = mutableListOf<Int>()
@@ -1539,4 +1563,445 @@ class FloatingBallService : AccessibilityService() {
             val artist: TextView = view.findViewById(R.id.txt_item_artist)
         }
     }
+
+    // --- AUTO CLICKER METHODS ---
+    private fun setupClickerPage() {
+        val backBtn = menuView.findViewById<View>(R.id.btn_clicker_page_back)
+        backBtn.setOnClickListener {
+            menuView.findViewById<View>(R.id.layout_menu_buttons).visibility = View.VISIBLE
+            menuView.findViewById<View>(R.id.layout_clicker_container).visibility = View.GONE
+        }
+
+        val addTargetBtn = menuView.findViewById<View>(R.id.btn_clicker_add_target)
+        addTargetBtn.setOnClickListener {
+            addTargetView(TargetType.CLICK)
+        }
+
+        val addSwipeBtn = menuView.findViewById<View>(R.id.btn_clicker_add_swipe)
+        addSwipeBtn.setOnClickListener {
+            addTargetView(TargetType.SWIPE)
+        }
+
+        val removeTargetBtn = menuView.findViewById<View>(R.id.btn_clicker_remove_target)
+        removeTargetBtn.setOnClickListener {
+            stopAutoClicker()
+            safeRemoveAllTargets()
+        }
+
+        val minusIntervalBtn = menuView.findViewById<View>(R.id.btn_clicker_interval_minus)
+        val plusIntervalBtn = menuView.findViewById<View>(R.id.btn_clicker_interval_plus)
+
+        minusIntervalBtn.setOnClickListener {
+            val target = targetList.find { it.id == selectedTargetId }
+            if (target != null) {
+                if (target.intervalMs > 100L) {
+                    target.intervalMs -= 100L
+                } else if (target.intervalMs > 10L) {
+                    target.intervalMs -= 10L
+                }
+                updateClickerMenuUI()
+            } else {
+                Toast.makeText(this, "Select a target first", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        plusIntervalBtn.setOnClickListener {
+            val target = targetList.find { it.id == selectedTargetId }
+            if (target != null) {
+                if (target.intervalMs < 100L) {
+                    target.intervalMs += 10L
+                } else {
+                    target.intervalMs += 100L
+                }
+                updateClickerMenuUI()
+            } else {
+                Toast.makeText(this, "Select a target first", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        val modeToggleBtn = menuView.findViewById<TextView>(R.id.btn_clicker_mode_toggle)
+        modeToggleBtn.setOnClickListener {
+            autoClickerIsRepeat = !autoClickerIsRepeat
+            updateClickerMenuUI()
+        }
+
+        val minusStopBtn = menuView.findViewById<View>(R.id.btn_clicker_stop_minus)
+        val plusStopBtn = menuView.findViewById<View>(R.id.btn_clicker_stop_plus)
+        val stopText = menuView.findViewById<TextView>(R.id.txt_clicker_stop_duration)
+
+        minusStopBtn.setOnClickListener {
+            if (stopDurationOptionIndex > 0) {
+                stopDurationOptionIndex--
+                stopText.text = stopDurationLabels[stopDurationOptionIndex]
+            }
+        }
+
+        plusStopBtn.setOnClickListener {
+            if (stopDurationOptionIndex < stopDurationOptions.lastIndex) {
+                stopDurationOptionIndex++
+                stopText.text = stopDurationLabels[stopDurationOptionIndex]
+            }
+        }
+
+        val startStopBtn = menuView.findViewById<TextView>(R.id.btn_clicker_start_stop)
+        startStopBtn.setOnClickListener {
+            if (isAutoClickerRunning) {
+                stopAutoClicker()
+            } else {
+                startAutoClicker()
+            }
+        }
+
+        updateClickerMenuUI()
+    }
+
+    private fun updateClickerMenuUI() {
+        val targetLabel = menuView.findViewById<TextView>(R.id.txt_clicker_target_label) ?: return
+        val intervalText = menuView.findViewById<TextView>(R.id.txt_clicker_interval) ?: return
+        val modeToggleBtn = menuView.findViewById<TextView>(R.id.btn_clicker_mode_toggle) ?: return
+        val stopText = menuView.findViewById<TextView>(R.id.txt_clicker_stop_duration) ?: return
+
+        val target = targetList.find { it.id == selectedTargetId }
+        if (target != null) {
+            val typeLabel = if (target.type == TargetType.SWIPE) "Swipe #${target.id}" else "Target #${target.id}"
+            targetLabel.text = typeLabel
+            targetLabel.setTextColor(android.graphics.Color.parseColor("#FF00E5FF"))
+            intervalText.text = "Interval: ${target.intervalMs}ms"
+        } else {
+            targetLabel.text = "No Target"
+            targetLabel.setTextColor(android.graphics.Color.parseColor("#88FFFFFF"))
+            intervalText.text = "Interval: --"
+        }
+
+        modeToggleBtn.text = if (autoClickerIsRepeat) "Cycle Mode: Repeatedly" else "Cycle Mode: Once"
+        stopText.text = stopDurationLabels[stopDurationOptionIndex]
+    }
+
+    private fun addTargetView(type: TargetType) {
+        val nextId = if (targetList.isEmpty()) 1 else targetList.maxOf { it.id } + 1
+        
+        val inflater = getSystemService(Context.LAYOUT_INFLATER_SERVICE) as LayoutInflater
+        val density = resources.displayMetrics.density
+        val displayMetrics = resources.displayMetrics
+        val screenWidth = displayMetrics.widthPixels
+        val screenHeight = displayMetrics.heightPixels
+
+        val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        } else {
+            @Suppress("DEPRECATION")
+            WindowManager.LayoutParams.TYPE_PHONE
+        }
+
+        val cascadeOffset = ((nextId - 1) * 25 * density).toInt()
+
+        // Create click target or swipe start target
+        val view = inflater.inflate(R.layout.floating_target_layout, null)
+        val targetText = if (type == TargetType.CLICK) nextId.toString() else "S#$nextId"
+        view.findViewById<TextView>(R.id.txt_target_number)?.text = targetText
+        
+        val targetImg = view.findViewById<ImageView>(R.id.target_image)
+        // Set Cyan color for Click / Swipe Start
+        targetImg.setColorFilter(android.graphics.Color.parseColor("#FF00E5FF"))
+
+        val targetX = (screenWidth / 2 - (20 * density).toInt() + cascadeOffset).coerceIn(0, screenWidth - (40 * density).toInt())
+        val targetY = (screenHeight / 2 - (20 * density).toInt() + cascadeOffset).coerceIn(0, screenHeight - (40 * density).toInt())
+
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            layoutType,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = targetX
+            y = targetY
+        }
+
+        windowManager.addView(view, params)
+
+        var endView: View? = null
+        var endParams: WindowManager.LayoutParams? = null
+
+        if (type == TargetType.SWIPE) {
+            // Create Swipe End target
+            endView = inflater.inflate(R.layout.floating_target_layout, null)
+            endView.findViewById<TextView>(R.id.txt_target_number)?.text = "E#$nextId"
+            
+            val endImg = endView.findViewById<ImageView>(R.id.target_image)
+            // Set soft Red/Orange color for Swipe End
+            endImg.setColorFilter(android.graphics.Color.parseColor("#FFFF8A80"))
+
+            val endXVal = (targetX + (60 * density).toInt()).coerceIn(0, screenWidth - (40 * density).toInt())
+            val endYVal = targetY
+
+            endParams = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                layoutType,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.TOP or Gravity.START
+                x = endXVal
+                y = endYVal
+            }
+
+            windowManager.addView(endView, endParams)
+        }
+
+        val target = TargetData(nextId, type, view, params, endView, endParams)
+        setupTargetTouchListener(target, isEndView = false)
+        if (type == TargetType.SWIPE) {
+            setupTargetTouchListener(target, isEndView = true)
+        }
+        
+        targetList.add(target)
+        selectedTargetId = target.id
+        updateClickerMenuUI()
+    }
+
+    private fun safeRemoveAllTargets() {
+        targetList.forEach { target ->
+            windowManager.removeView(target.view)
+            if (target.type == TargetType.SWIPE && target.endView != null) {
+                windowManager.removeView(target.endView)
+            }
+        }
+        targetList.clear()
+        selectedTargetId = -1
+        updateClickerMenuUI()
+    }
+
+    private fun setupTargetTouchListener(target: TargetData, isEndView: Boolean = false) {
+        var initialX = 0; var initialY = 0
+        var initialTouchX = 0f; var initialTouchY = 0f
+        var startTime = 0L
+
+        val activeView = if (isEndView) target.endView else target.view
+        val activeParams = if (isEndView) target.endParams else target.params
+
+        if (activeView == null || activeParams == null) return
+
+        activeView.setOnTouchListener { _, event ->
+            if (isAutoClickerRunning) {
+                false
+            } else {
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        initialX = activeParams.x
+                        initialY = activeParams.y
+                        initialTouchX = event.rawX
+                        initialTouchY = event.rawY
+                        startTime = System.currentTimeMillis()
+                        true
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val displayMetrics = resources.displayMetrics
+                        val density = displayMetrics.density
+                        val screenWidth = displayMetrics.widthPixels
+                        val screenHeight = displayMetrics.heightPixels
+
+                        val newX = initialX + (event.rawX - initialTouchX).toInt()
+                        val newY = initialY + (event.rawY - initialTouchY).toInt()
+
+                        val limitX = screenWidth - (40 * density).toInt()
+                        val limitY = screenHeight - (40 * density).toInt()
+
+                        activeParams.x = newX.coerceIn(0, limitX)
+                        activeParams.y = newY.coerceIn(0, limitY)
+
+                        windowManager.updateViewLayout(activeView, activeParams)
+                        true
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        val duration = System.currentTimeMillis() - startTime
+                        val distanceX = abs(event.rawX - initialTouchX)
+                        val distanceY = abs(event.rawY - initialTouchY)
+                        
+                        if (duration < 250 && distanceX < 10 && distanceY < 10) {
+                            selectTargetAndShowMenu(target)
+                        }
+                        true
+                    }
+                    else -> false
+                }
+            }
+        }
+    }
+
+    private fun selectTargetAndShowMenu(target: TargetData) {
+        selectedTargetId = target.id
+        
+        if (!isMenuVisible) {
+            showMenu()
+        }
+        
+        menuView.findViewById<View>(R.id.layout_menu_buttons).visibility = View.GONE
+        menuView.findViewById<View>(R.id.layout_music_container).visibility = View.GONE
+        menuView.findViewById<View>(R.id.layout_video_container).visibility = View.GONE
+        menuView.findViewById<View>(R.id.layout_cursor_container).visibility = View.GONE
+        menuView.findViewById<View>(R.id.layout_clicker_container).visibility = View.VISIBLE
+        
+        updateClickerMenuUI()
+        
+        val selectMsg = if (target.type == TargetType.SWIPE) "Swipe #${target.id} Selected" else "Target #${target.id} Selected"
+        Toast.makeText(this, selectMsg, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun setTargetsClickable(clickable: Boolean) {
+        targetList.forEach { target ->
+            if (clickable) {
+                target.params.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                if (target.type == TargetType.SWIPE && target.endParams != null && target.endView != null) {
+                    target.endParams.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                }
+            } else {
+                target.params.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                if (target.type == TargetType.SWIPE && target.endParams != null && target.endView != null) {
+                    target.endParams.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                }
+            }
+            windowManager.updateViewLayout(target.view, target.params)
+            if (target.type == TargetType.SWIPE && target.endView != null && target.endParams != null) {
+                windowManager.updateViewLayout(target.endView, target.endParams)
+            }
+        }
+    }
+
+    private fun startAutoClicker() {
+        if (isAutoClickerRunning) return
+        if (targetList.isEmpty()) {
+            Toast.makeText(this, "Please add a target first", Toast.LENGTH_SHORT).show()
+            return
+        }
+        isAutoClickerRunning = true
+        updateClickerStartStopButton()
+        setTargetsClickable(false)
+
+        closeMenu()
+
+        val durationLimit = stopDurationOptions[stopDurationOptionIndex]
+
+        clickerJob = serviceScope.launch {
+            val startTime = System.currentTimeMillis()
+            while (isAutoClickerRunning) {
+                if (durationLimit > 0L && System.currentTimeMillis() - startTime >= durationLimit) {
+                    stopAutoClicker()
+                    break
+                }
+                
+                for (target in targetList) {
+                    if (!isAutoClickerRunning) break
+                    
+                    delay(target.intervalMs)
+                    
+                    if (durationLimit > 0L && System.currentTimeMillis() - startTime >= durationLimit) {
+                        break
+                    }
+                    
+                    if (!isMenuVisible) {
+                        if (target.type == TargetType.CLICK) {
+                            performTargetClick(target)
+                        } else if (target.type == TargetType.SWIPE) {
+                            performTargetSwipe(target)
+                        }
+                    }
+                }
+                
+                if (!autoClickerIsRepeat) {
+                    stopAutoClicker()
+                    break
+                }
+            }
+        }
+    }
+
+    private fun stopAutoClicker() {
+        isAutoClickerRunning = false
+        clickerJob?.cancel()
+        clickerJob = null
+        updateClickerStartStopButton()
+        setTargetsClickable(true)
+    }
+
+    private fun performTargetClick(target: TargetData) {
+        val density = resources.displayMetrics.density
+        val clickX = target.params.x + (20 * density).toInt()
+        val clickY = target.params.y + (20 * density).toInt()
+        performSimulatedClick(clickX, clickY)
+    }
+
+    private fun performTargetSwipe(target: TargetData) {
+        val startParams = target.params
+        val endParams = target.endParams ?: return
+        val density = resources.displayMetrics.density
+        
+        val startX = startParams.x + (20 * density).toInt()
+        val startY = startParams.y + (20 * density).toInt()
+        val endX = endParams.x + (20 * density).toInt()
+        val endY = endParams.y + (20 * density).toInt()
+
+        performSimulatedSwipe(startX, startY, endX, endY, 300L)
+    }
+
+    private fun performSimulatedSwipe(startX: Int, startY: Int, endX: Int, endY: Int, durationMs: Long = 300L) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            val path = android.graphics.Path().apply {
+                moveTo(startX.toFloat(), startY.toFloat())
+                lineTo(endX.toFloat(), endY.toFloat())
+            }
+            val stroke = android.accessibilityservice.GestureDescription.StrokeDescription(
+                path, 0, durationMs.coerceAtLeast(50L)
+            )
+            val gesture = android.accessibilityservice.GestureDescription.Builder()
+                .addStroke(stroke).build()
+            dispatchGesture(gesture, null, null)
+        }
+    }
+
+    private fun updateClickerStartStopButton() {
+        val startStopBtn = menuView.findViewById<TextView>(R.id.btn_clicker_start_stop) ?: return
+        if (isAutoClickerRunning) {
+            startStopBtn.text = "STOP"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                startStopBtn.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#EF5350"))
+            } else {
+                startStopBtn.setBackgroundColor(android.graphics.Color.parseColor("#EF5350"))
+            }
+        } else {
+            startStopBtn.text = "START"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                startStopBtn.backgroundTintList = null
+            } else {
+                startStopBtn.setBackgroundResource(R.drawable.btn_item_bg)
+            }
+        }
+    }
 }
+
+// --- Target Types ---
+enum class TargetType {
+    CLICK,
+    SWIPE
+}
+
+// --- Helper Data Model for Multi-Target Auto Clicker ---
+data class TargetData(
+    val id: Int,
+    val type: TargetType,
+    val view: View,
+    val params: WindowManager.LayoutParams,
+    val endView: View? = null,
+    val endParams: WindowManager.LayoutParams? = null,
+    var intervalMs: Long = 500L
+)
