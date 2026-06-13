@@ -51,8 +51,10 @@ fun AppNavigation(
                     label = { Text("Layout Setup") },
                     selected = currentScreen == ScreenDestination.DASHBOARD,
                     onClick = {
-                        currentScreen = ScreenDestination.DASHBOARD
-                        scope.launch { drawerState.close() }
+                        scope.launch {
+                            drawerState.close()
+                            currentScreen = ScreenDestination.DASHBOARD
+                        }
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
@@ -62,8 +64,10 @@ fun AppNavigation(
                     label = { Text("Settings") },
                     selected = currentScreen == ScreenDestination.SETTINGS,
                     onClick = {
-                        currentScreen = ScreenDestination.SETTINGS
-                        scope.launch { drawerState.close() }
+                        scope.launch {
+                            drawerState.close()
+                            currentScreen = ScreenDestination.SETTINGS
+                        }
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
@@ -73,8 +77,10 @@ fun AppNavigation(
                     label = { Text("About") },
                     selected = currentScreen == ScreenDestination.ABOUT,
                     onClick = {
-                        currentScreen = ScreenDestination.ABOUT
-                        scope.launch { drawerState.close() }
+                        scope.launch {
+                            drawerState.close()
+                            currentScreen = ScreenDestination.ABOUT
+                        }
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )

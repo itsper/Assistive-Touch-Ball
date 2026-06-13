@@ -74,6 +74,11 @@ class FloatingBallService : AccessibilityService() {
     private var videoProgressJob: Job? = null
     private var isUserTrackingVideoSeekBar = false
 
+    // Virtual Mouse Cursor variables
+    private var cursorView: View? = null
+    private var isCursorVisible = false
+    private lateinit var cursorParams: WindowManager.LayoutParams
+
     private val serviceJob = Job()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
     private var progressJob: Job? = null
@@ -132,7 +137,9 @@ class FloatingBallService : AccessibilityService() {
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             layoutType,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or   // ADD THIS
+                    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -155,6 +162,7 @@ class FloatingBallService : AccessibilityService() {
         val videoViewHolder = VideoViewHolder(menuView.findViewById(R.id.layout_video_container))
         setupMusicPage(musicViewHolder)
         setupVideoPage(videoViewHolder)
+        setupTouchpadPage()
     }
 
     // --- UPGRADED TO HANDLE THE CHARACTER SKIN UPDATES LIVE ---
@@ -236,11 +244,162 @@ class FloatingBallService : AccessibilityService() {
     }
 
     private fun addMenuView() {
-        if (!isMenuVisible) { windowManager.addView(menuView, menuParams); isMenuVisible = true }
+        if (!isMenuVisible) {
+            menuParams.alpha = 1f
+            windowManager.addView(menuView, menuParams)
+            isMenuVisible = true
+        }
     }
 
     private fun safeRemoveMenu() {
-        if (isMenuVisible) { windowManager.removeView(menuView); isMenuVisible = false }
+        if (isMenuVisible) {
+            windowManager.removeView(menuView)
+            isMenuVisible = false
+            safeRemoveCursor()
+            menuParams.alpha = 1f
+        }
+    }
+
+    private fun addCursorView() {
+        if (cursorView == null) {
+            val inflater = getSystemService(Context.LAYOUT_INFLATER_SERVICE) as LayoutInflater
+            cursorView = inflater.inflate(R.layout.floating_cursor_layout, null)
+
+            val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            } else {
+                @Suppress("DEPRECATION")
+                WindowManager.LayoutParams.TYPE_PHONE
+            }
+
+            val displayMetrics = resources.displayMetrics
+            val screenWidth = displayMetrics.widthPixels
+            val screenHeight = displayMetrics.heightPixels
+
+            cursorParams = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                layoutType,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.TOP or Gravity.START
+                x = screenWidth / 2
+                y = screenHeight / 2
+            }
+        }
+
+        if (!isCursorVisible) {
+            windowManager.addView(cursorView, cursorParams)
+            isCursorVisible = true
+        }
+    }
+
+    private fun safeRemoveCursor() {
+        if (isCursorVisible && cursorView != null) {
+            windowManager.removeView(cursorView)
+            isCursorVisible = false
+        }
+    }
+
+    private fun performSimulatedClick(x: Int, y: Int) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            val density = resources.displayMetrics.density
+            val clickX = x + (7 * density).toInt()
+            val clickY = y + (2 * density).toInt()
+
+            val path = android.graphics.Path().apply {
+                moveTo(clickX.toFloat(), clickY.toFloat())
+                lineTo(clickX.toFloat(), clickY.toFloat())
+            }
+            val stroke = android.accessibilityservice.GestureDescription.StrokeDescription(
+                path, 0, 100  // increased from 50 to 100ms
+            )
+            val gesture = android.accessibilityservice.GestureDescription.Builder()
+                .addStroke(stroke).build()
+            dispatchGesture(gesture, null, null)
+        }
+    }
+
+    private fun setupTouchpadPage() {
+        val backBtn = menuView.findViewById<View>(R.id.btn_cursor_page_back)
+        backBtn.setOnClickListener {
+            menuView.findViewById<View>(R.id.layout_menu_buttons).visibility = View.VISIBLE
+            menuView.findViewById<View>(R.id.layout_cursor_container).visibility = View.GONE
+            safeRemoveCursor()
+        }
+
+        val clickBtn = menuView.findViewById<View>(R.id.btn_touchpad_click)
+        clickBtn.setOnClickListener {
+            if (isCursorVisible && ::cursorParams.isInitialized) {
+                val clickX = cursorParams.x
+                val clickY = cursorParams.y
+                // Briefly hide menu so it doesn't block the gesture, then restore
+                windowManager.updateViewLayout(menuView, menuParams.apply {
+                    alpha = 0f
+                })
+                mainHandler.postDelayed({
+                    performSimulatedClick(clickX, clickY)
+                    mainHandler.postDelayed({
+                        if (isMenuVisible) {
+                            menuParams.alpha = 1f
+                            windowManager.updateViewLayout(menuView, menuParams)
+                        }
+                    }, 120)
+                }, 60)
+            }
+        }
+
+        val sensor = menuView.findViewById<View>(R.id.touchpad_sensor)
+
+        var lastTouchX = 0f
+        var lastTouchY = 0f
+        var startX = 0f
+        var startY = 0f
+        var startTime = 0L
+        var isDrag = false
+
+        sensor.setOnTouchListener { _, event ->
+            val displayMetrics = resources.displayMetrics
+            val screenWidth = displayMetrics.widthPixels
+            val screenHeight = displayMetrics.heightPixels
+            val density = displayMetrics.density
+
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    startX = event.x
+                    startY = event.y
+                    lastTouchX = event.x
+                    lastTouchY = event.y
+                    startTime = System.currentTimeMillis()
+                    isDrag = false
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = event.x - lastTouchX
+                    val dy = event.y - lastTouchY
+                    val dragThreshold = 12 * density
+                    if (kotlin.math.abs(event.x - startX) > dragThreshold || kotlin.math.abs(event.y - startY) > dragThreshold) {
+                        isDrag = true
+                    }
+                    if (isCursorVisible && ::cursorParams.isInitialized) {
+                        val speedMultiplier = 1.8f
+                        cursorParams.x = (cursorParams.x + dx * speedMultiplier).toInt().coerceIn(0, screenWidth)
+                        cursorParams.y = (cursorParams.y + dy * speedMultiplier).toInt().coerceIn(0, screenHeight)
+                        windowManager.updateViewLayout(cursorView, cursorParams)
+                    }
+                    lastTouchX = event.x
+                    lastTouchY = event.y
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    true
+                }
+                else -> false
+            }
+        }
     }
 
     private fun setupOutsideTouchDismiss() {
@@ -401,6 +560,13 @@ class FloatingBallService : AccessibilityService() {
             menuView.findViewById<View>(R.id.layout_music_container).visibility = View.GONE
             menuView.findViewById<View>(R.id.layout_video_container).visibility = View.VISIBLE
         }
+        map[R.id.btn_cursor] = {
+            menuView.findViewById<View>(R.id.layout_menu_buttons).visibility = View.GONE
+            menuView.findViewById<View>(R.id.layout_music_container).visibility = View.GONE
+            menuView.findViewById<View>(R.id.layout_video_container).visibility = View.GONE
+            menuView.findViewById<View>(R.id.layout_cursor_container).visibility = View.VISIBLE
+            addCursorView()
+        }
         map[R.id.btn_close] = { closeMenu() }
 
         actionMap = map
@@ -411,9 +577,10 @@ class FloatingBallService : AccessibilityService() {
         menuView.findViewById<View>(R.id.layout_menu_buttons).visibility = View.VISIBLE
         menuView.findViewById<View>(R.id.layout_music_container).visibility = View.GONE
         menuView.findViewById<View>(R.id.layout_video_container).visibility = View.GONE
+        menuView.findViewById<View>(R.id.layout_cursor_container).visibility = View.GONE
 
         val prefs = getSharedPreferences("AssistivePrefs", Context.MODE_PRIVATE)
-        val defaultOrder = "btn_home,btn_back,btn_recents,btn_screenshot,btn_volume,btn_flashlight,btn_notification,btn_brightness,btn_rotate,btn_wifi,btn_data,btn_bluetooth,btn_airplane,btn_hotspot,btn_onehanded,btn_music,btn_video"
+        val defaultOrder = "btn_home,btn_back,btn_recents,btn_screenshot,btn_volume,btn_flashlight,btn_notification,btn_brightness,btn_rotate,btn_wifi,btn_data,btn_bluetooth,btn_airplane,btn_hotspot,btn_onehanded,btn_music,btn_video,btn_cursor"
         val savedOrder = prefs.getString("tool_order", defaultOrder) ?: defaultOrder
         val orderedKeys = savedOrder.split(",").filter { it.isNotEmpty() }
 
@@ -434,7 +601,8 @@ class FloatingBallService : AccessibilityService() {
             "btn_hotspot"      to R.id.btn_hotspot,
             "btn_onehanded"    to R.id.btn_onehanded,
             "btn_music"        to R.id.btn_music,
-            "btn_video"        to R.id.btn_video
+            "btn_video"        to R.id.btn_video,
+            "btn_cursor"       to R.id.btn_cursor
         )
 
         val activeResIds = mutableListOf<Int>()

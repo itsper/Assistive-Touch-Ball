@@ -73,34 +73,14 @@ fun SettingsScreen() {
         context.startService(intent)
     }
 
-    Scaffold(
-        topBar = {
-            // Using a compact, transparent top bar so it doesn't leave a massive blank area
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Preferences",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 22.sp,
-                        letterSpacing = (-0.5).sp
-                    )
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    scrolledContainerColor = Color.Transparent
-                )
-            )
-        }
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 0.dp), // Reduced vertical padding
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
 
             // --- GENERAL SECTION ---
             SettingSectionHeader(title = "General")
@@ -260,7 +240,6 @@ fun SettingsScreen() {
             Spacer(modifier = Modifier.height(16.dp))
         }
     }
-}
 
 // --- SUB-COMPONENTS FOR CLEANER ARCHITECTURE ---
 

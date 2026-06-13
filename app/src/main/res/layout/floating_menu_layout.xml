@@ -48,4 +48,12 @@
         android:visibility="gone">
         <include layout="@layout/floating_menu_video" />
     </FrameLayout>
+
+    <FrameLayout
+        android:id="@+id/layout_cursor_container"
+        android:layout_width="200dp"
+        android:layout_height="234dp"
+        android:visibility="gone">
+        <include layout="@layout/floating_menu_cursor" />
+    </FrameLayout>
 </FrameLayout>
