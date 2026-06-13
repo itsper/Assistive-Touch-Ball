@@ -150,6 +150,11 @@ class FloatingBallService : AccessibilityService() {
         scanLocalSongs()
         initVideoPlayer()
         scanLocalVideos()
+
+        val musicViewHolder = MusicViewHolder(menuView.findViewById(R.id.layout_music_container))
+        val videoViewHolder = VideoViewHolder(menuView.findViewById(R.id.layout_video_container))
+        setupMusicPage(musicViewHolder)
+        setupVideoPage(videoViewHolder)
     }
 
     // --- UPGRADED TO HANDLE THE CHARACTER SKIN UPDATES LIVE ---
@@ -387,16 +392,14 @@ class FloatingBallService : AccessibilityService() {
             closeMenu()
         }
         map[R.id.btn_music] = {
-            val adapter = viewPager.adapter
-            if (adapter != null) {
-                viewPager.setCurrentItem(adapter.itemCount - 2, true)
-            }
+            menuView.findViewById<View>(R.id.layout_menu_buttons).visibility = View.GONE
+            menuView.findViewById<View>(R.id.layout_music_container).visibility = View.VISIBLE
+            menuView.findViewById<View>(R.id.layout_video_container).visibility = View.GONE
         }
         map[R.id.btn_video] = {
-            val adapter = viewPager.adapter
-            if (adapter != null) {
-                viewPager.setCurrentItem(adapter.itemCount - 1, true)
-            }
+            menuView.findViewById<View>(R.id.layout_menu_buttons).visibility = View.GONE
+            menuView.findViewById<View>(R.id.layout_music_container).visibility = View.GONE
+            menuView.findViewById<View>(R.id.layout_video_container).visibility = View.VISIBLE
         }
         map[R.id.btn_close] = { closeMenu() }
 
@@ -404,6 +407,11 @@ class FloatingBallService : AccessibilityService() {
     }
 
     private fun showMenu() {
+        // Reset visibilities when menu is displayed
+        menuView.findViewById<View>(R.id.layout_menu_buttons).visibility = View.VISIBLE
+        menuView.findViewById<View>(R.id.layout_music_container).visibility = View.GONE
+        menuView.findViewById<View>(R.id.layout_video_container).visibility = View.GONE
+
         val prefs = getSharedPreferences("AssistivePrefs", Context.MODE_PRIVATE)
         val defaultOrder = "btn_home,btn_back,btn_recents,btn_screenshot,btn_volume,btn_flashlight,btn_notification,btn_brightness,btn_rotate,btn_wifi,btn_data,btn_bluetooth,btn_airplane,btn_hotspot,btn_onehanded,btn_music,btn_video"
         val savedOrder = prefs.getString("tool_order", defaultOrder) ?: defaultOrder
@@ -455,7 +463,7 @@ class FloatingBallService : AccessibilityService() {
 
         activeResIds.add(R.id.btn_close)
         val pages = activeResIds.chunked(6)
-        val totalPagesCount = pages.size + 2
+        val totalPagesCount = pages.size
 
         viewPager.adapter = MenuPagerAdapter(pages, actionMap)
 
@@ -697,6 +705,12 @@ class FloatingBallService : AccessibilityService() {
 
         holder.layoutPlayer.visibility = View.VISIBLE
         holder.layoutPlaylist.visibility = View.GONE
+
+        holder.btnMusicPlayerBack.setOnClickListener {
+            menuView.findViewById<View>(R.id.layout_menu_buttons).visibility = View.VISIBLE
+            menuView.findViewById<View>(R.id.layout_music_container).visibility = View.GONE
+            menuView.findViewById<View>(R.id.layout_video_container).visibility = View.GONE
+        }
 
         // Initialize our unified layout adapter engine matching handlers
         lateinit var unifiedAdapter: PlaylistAdapter
@@ -985,6 +999,12 @@ class FloatingBallService : AccessibilityService() {
         holder.layoutPlayer.visibility = View.VISIBLE
         holder.layoutPlaylist.visibility = View.GONE
 
+        holder.btnVideoPlayerBack.setOnClickListener {
+            menuView.findViewById<View>(R.id.layout_menu_buttons).visibility = View.VISIBLE
+            menuView.findViewById<View>(R.id.layout_music_container).visibility = View.GONE
+            menuView.findViewById<View>(R.id.layout_video_container).visibility = View.GONE
+        }
+
         // Bind PlayerView to Player instance
         holder.playerView.player = videoPlayer
 
@@ -1181,90 +1201,45 @@ class FloatingBallService : AccessibilityService() {
     private inner class MenuPagerAdapter(
         private val pages: List<List<Int>>,
         private val actions: Map<Int, () -> Unit>
-    ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+    ) : RecyclerView.Adapter<GridViewHolder>() {
 
-        private val VIEW_TYPE_GRID = 0
-        private val VIEW_TYPE_MUSIC = 1
-        private val VIEW_TYPE_VIDEO = 2
-
-        override fun getItemViewType(position: Int): Int {
-            return when (position) {
-                in 0 until pages.size -> VIEW_TYPE_GRID
-                pages.size -> VIEW_TYPE_MUSIC
-                pages.size + 1 -> VIEW_TYPE_VIDEO
-                else -> VIEW_TYPE_GRID
-            }
-        }
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): GridViewHolder {
             val inflater = LayoutInflater.from(parent.context)
-            return when (viewType) {
-                VIEW_TYPE_GRID -> {
-                    val view = inflater.inflate(R.layout.floating_menu_page, parent, false)
-                    GridViewHolder(view)
-                }
-                VIEW_TYPE_MUSIC -> {
-                    val view = inflater.inflate(R.layout.floating_menu_music, parent, false)
-                    MusicViewHolder(view)
-                }
-                VIEW_TYPE_VIDEO -> {
-                    val view = inflater.inflate(R.layout.floating_menu_video, parent, false)
-                    VideoViewHolder(view)
-                }
-                else -> {
-                    val view = inflater.inflate(R.layout.floating_menu_page, parent, false)
-                    GridViewHolder(view)
-                }
-            }
+            val view = inflater.inflate(R.layout.floating_menu_page, parent, false)
+            return GridViewHolder(view)
         }
 
-        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-            if (holder is GridViewHolder) {
-                holder.gridLayout.removeAllViews()
+        override fun onBindViewHolder(holder: GridViewHolder, position: Int) {
+            holder.gridLayout.removeAllViews()
 
-                val context = holder.itemView.context
-                val density = context.resources.displayMetrics.density
-                val widthPx  = (90 * density).toInt()
-                val heightPx = (60 * density).toInt()
-                val marginPx = (4  * density).toInt()
+            val context = holder.itemView.context
+            val density = context.resources.displayMetrics.density
+            val widthPx  = (90 * density).toInt()
+            val heightPx = (60 * density).toInt()
+            val marginPx = (4  * density).toInt()
 
-                val inflater = LayoutInflater.from(context)
-                val fullTemplate = inflater.inflate(R.layout.floating_menu_page, null) as ViewGroup
-                val targetedGrid = fullTemplate.findViewById<GridLayout>(R.id.page_grid)
+            val inflater = LayoutInflater.from(context)
+            val fullTemplate = inflater.inflate(R.layout.floating_menu_page, null) as ViewGroup
+            val targetedGrid = fullTemplate.findViewById<GridLayout>(R.id.page_grid)
 
-                pages[position].forEach { resId ->
-                    val button = targetedGrid.findViewById<View>(resId)
-                    if (button != null) {
-                        targetedGrid.removeView(button)
-                        button.visibility = View.VISIBLE
-                        button.setOnClickListener { actions[resId]?.invoke() }
+            pages[position].forEach { resId ->
+                val button = targetedGrid.findViewById<View>(resId)
+                if (button != null) {
+                    targetedGrid.removeView(button)
+                    button.visibility = View.VISIBLE
+                    button.setOnClickListener { actions[resId]?.invoke() }
 
-                        val params = GridLayout.LayoutParams().apply {
-                            width  = widthPx
-                            height = heightPx
-                            setMargins(marginPx, marginPx, marginPx, marginPx)
-                        }
-                        holder.gridLayout.addView(button, params)
+                    val params = GridLayout.LayoutParams().apply {
+                        width  = widthPx
+                        height = heightPx
+                        setMargins(marginPx, marginPx, marginPx, marginPx)
                     }
+                    holder.gridLayout.addView(button, params)
                 }
-            } else if (holder is MusicViewHolder) {
-                setupMusicPage(holder)
-            } else if (holder is VideoViewHolder) {
-                setupVideoPage(holder)
             }
         }
 
-        override fun getItemCount(): Int = pages.size + 2
-
-        override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
-            if (holder is MusicViewHolder) {
-                activeMusicViewHolder = null
-            } else if (holder is VideoViewHolder) {
-                activeVideoViewHolder = null
-                holder.playerView.player = null
-            }
-            super.onViewRecycled(holder)
-        }
+        override fun getItemCount(): Int = pages.size
     }
 
     private class GridViewHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -1273,6 +1248,7 @@ class FloatingBallService : AccessibilityService() {
 
     private class MusicViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val layoutPlayer: View = view.findViewById(R.id.layout_player)
+        val btnMusicPlayerBack: ImageButton = view.findViewById(R.id.btn_music_player_back)
         val imgDisc: ImageView = view.findViewById(R.id.img_disc)
         val txtTrackTitle: TextView = view.findViewById(R.id.txt_track_title)
         val txtTrackArtist: TextView = view.findViewById(R.id.txt_track_artist)
@@ -1292,6 +1268,7 @@ class FloatingBallService : AccessibilityService() {
 
     private class VideoViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val layoutPlayer: View = view.findViewById(R.id.layout_video_player)
+        val btnVideoPlayerBack: ImageButton = view.findViewById(R.id.btn_video_player_back)
         val playerView: PlayerView = view.findViewById(R.id.video_player_view)
         val txtVideoTitle: TextView = view.findViewById(R.id.txt_video_title)
         val playerSeekBar: SeekBar = view.findViewById(R.id.video_seekbar)

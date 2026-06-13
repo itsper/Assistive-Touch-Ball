@@ -1,29 +1,51 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
+<FrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
     android:background="@drawable/floating_menu_bg"
     android:padding="12dp"
-    android:elevation="12dp"
-    android:gravity="center_horizontal"
-    android:minWidth="220dp">
+    android:elevation="12dp">
 
-    <androidx.viewpager2.widget.ViewPager2
-        android:id="@+id/menu_viewpager"
+    <LinearLayout
+        android:id="@+id/layout_menu_buttons"
         android:layout_width="200dp"
-        android:layout_height="210dp"
-        android:layout_weight="1" />
+        android:layout_height="234dp"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:visibility="visible">
 
-    <TextView
-        android:id="@+id/txt_page_indicator"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="1 / 2"
-        android:textColor="#88FFFFFF"
-        android:textSize="11sp"
-        android:layout_marginTop="8dp"
-        android:layout_marginBottom="2dp"
-        android:fontFamily="sans-serif-medium"/>
-</LinearLayout>
+        <androidx.viewpager2.widget.ViewPager2
+            android:id="@+id/menu_viewpager"
+            android:layout_width="200dp"
+            android:layout_height="210dp"
+            android:layout_weight="1" />
+
+        <TextView
+            android:id="@+id/txt_page_indicator"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="1 / 2"
+            android:textColor="#88FFFFFF"
+            android:textSize="11sp"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="2dp"
+            android:fontFamily="sans-serif-medium"/>
+    </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/layout_music_container"
+        android:layout_width="200dp"
+        android:layout_height="234dp"
+        android:visibility="gone">
+        <include layout="@layout/floating_menu_music" />
+    </FrameLayout>
+
+    <FrameLayout
+        android:id="@+id/layout_video_container"
+        android:layout_width="200dp"
+        android:layout_height="234dp"
+        android:visibility="gone">
+        <include layout="@layout/floating_menu_video" />
+    </FrameLayout>
+</FrameLayout>
