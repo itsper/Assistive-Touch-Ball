@@ -50,6 +50,7 @@ class FloatingBallService : AccessibilityService() {
     internal lateinit var videoManager: VideoManager
     internal lateinit var touchpadManager: TouchpadManager
     internal lateinit var autoClickerManager: AutoClickerManager
+    internal lateinit var notesManager: NotesManager
 
     private val serviceJob = Job()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
@@ -88,6 +89,7 @@ class FloatingBallService : AccessibilityService() {
         videoManager = VideoManager(this, serviceScope, menuView)
         touchpadManager = TouchpadManager(this, menuView)
         autoClickerManager = AutoClickerManager(this, serviceScope, menuView)
+        notesManager = NotesManager(this, menuView)
 
         setupActionMap()
 
@@ -134,6 +136,7 @@ class FloatingBallService : AccessibilityService() {
         videoManager.init()
         touchpadManager.init()
         autoClickerManager.init()
+        notesManager.init()
     }
 
     private fun applyLiveSettings() {
@@ -194,6 +197,7 @@ class FloatingBallService : AccessibilityService() {
         safeRemoveMenu()
 
         // Destroy managers
+        notesManager.onDestroy()
         autoClickerManager.onDestroy()
         musicManager.onDestroy()
         videoManager.onDestroy()
@@ -220,10 +224,27 @@ class FloatingBallService : AccessibilityService() {
 
     internal fun safeRemoveMenu() {
         if (isMenuVisible) {
+            setMenuFocusable(false)
             windowManager.removeView(menuView)
             isMenuVisible = false
             touchpadManager.safeRemoveCursor()
             menuParams.alpha = 1f
+        }
+    }
+
+    internal fun setMenuFocusable(focusable: Boolean) {
+        if (focusable) {
+            menuParams.flags = menuParams.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+            menuParams.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+        } else {
+            menuParams.flags = menuParams.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+        }
+        if (isMenuVisible) {
+            try {
+                windowManager.updateViewLayout(menuView, menuParams)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
@@ -376,29 +397,51 @@ class FloatingBallService : AccessibilityService() {
             closeMenu()
         }
         map[R.id.btn_music] = {
+            setMenuFocusable(false)
             menuView.findViewById<View>(R.id.layout_menu_buttons).visibility = View.GONE
             menuView.findViewById<View>(R.id.layout_music_container).visibility = View.VISIBLE
             menuView.findViewById<View>(R.id.layout_video_container).visibility = View.GONE
+            menuView.findViewById<View>(R.id.layout_cursor_container).visibility = View.GONE
+            menuView.findViewById<View>(R.id.layout_clicker_container).visibility = View.GONE
+            menuView.findViewById<View>(R.id.layout_note_container).visibility = View.GONE
         }
         map[R.id.btn_video] = {
+            setMenuFocusable(false)
             menuView.findViewById<View>(R.id.layout_menu_buttons).visibility = View.GONE
             menuView.findViewById<View>(R.id.layout_music_container).visibility = View.GONE
             menuView.findViewById<View>(R.id.layout_video_container).visibility = View.VISIBLE
+            menuView.findViewById<View>(R.id.layout_cursor_container).visibility = View.GONE
+            menuView.findViewById<View>(R.id.layout_clicker_container).visibility = View.GONE
+            menuView.findViewById<View>(R.id.layout_note_container).visibility = View.GONE
         }
         map[R.id.btn_cursor] = {
+            setMenuFocusable(false)
             menuView.findViewById<View>(R.id.layout_menu_buttons).visibility = View.GONE
             menuView.findViewById<View>(R.id.layout_music_container).visibility = View.GONE
             menuView.findViewById<View>(R.id.layout_video_container).visibility = View.GONE
             menuView.findViewById<View>(R.id.layout_cursor_container).visibility = View.VISIBLE
+            menuView.findViewById<View>(R.id.layout_clicker_container).visibility = View.GONE
+            menuView.findViewById<View>(R.id.layout_note_container).visibility = View.GONE
             touchpadManager.addCursorView()
         }
         map[R.id.btn_clicker] = {
+            setMenuFocusable(false)
             menuView.findViewById<View>(R.id.layout_menu_buttons).visibility = View.GONE
             menuView.findViewById<View>(R.id.layout_music_container).visibility = View.GONE
             menuView.findViewById<View>(R.id.layout_video_container).visibility = View.GONE
             menuView.findViewById<View>(R.id.layout_cursor_container).visibility = View.GONE
             menuView.findViewById<View>(R.id.layout_clicker_container).visibility = View.VISIBLE
+            menuView.findViewById<View>(R.id.layout_note_container).visibility = View.GONE
             autoClickerManager.updateClickerMenuUI()
+        }
+        map[R.id.btn_note] = {
+            menuView.findViewById<View>(R.id.layout_menu_buttons).visibility = View.GONE
+            menuView.findViewById<View>(R.id.layout_music_container).visibility = View.GONE
+            menuView.findViewById<View>(R.id.layout_video_container).visibility = View.GONE
+            menuView.findViewById<View>(R.id.layout_cursor_container).visibility = View.GONE
+            menuView.findViewById<View>(R.id.layout_clicker_container).visibility = View.GONE
+            menuView.findViewById<View>(R.id.layout_note_container).visibility = View.VISIBLE
+            notesManager.openNotesList()
         }
         map[R.id.btn_close] = { closeMenu() }
 
@@ -407,14 +450,16 @@ class FloatingBallService : AccessibilityService() {
 
     internal fun showMenu() {
         // Reset visibilities when menu is displayed
+        setMenuFocusable(false)
         menuView.findViewById<View>(R.id.layout_menu_buttons).visibility = View.VISIBLE
         menuView.findViewById<View>(R.id.layout_music_container).visibility = View.GONE
         menuView.findViewById<View>(R.id.layout_video_container).visibility = View.GONE
         menuView.findViewById<View>(R.id.layout_cursor_container).visibility = View.GONE
         menuView.findViewById<View>(R.id.layout_clicker_container).visibility = View.GONE
+        menuView.findViewById<View>(R.id.layout_note_container).visibility = View.GONE
 
         val prefs = getSharedPreferences("AssistivePrefs", Context.MODE_PRIVATE)
-        val defaultOrder = "btn_home,btn_back,btn_recents,btn_screenshot,btn_volume,btn_flashlight,btn_notification,btn_brightness,btn_rotate,btn_wifi,btn_data,btn_bluetooth,btn_airplane,btn_hotspot,btn_onehanded,btn_music,btn_video,btn_cursor,btn_clicker"
+        val defaultOrder = "btn_home,btn_back,btn_recents,btn_screenshot,btn_volume,btn_flashlight,btn_notification,btn_brightness,btn_rotate,btn_wifi,btn_data,btn_bluetooth,btn_airplane,btn_hotspot,btn_onehanded,btn_music,btn_video,btn_cursor,btn_clicker,btn_note"
         val savedOrder = prefs.getString("tool_order", defaultOrder) ?: defaultOrder
         val orderedKeys = savedOrder.split(",").filter { it.isNotEmpty() }
 
@@ -437,7 +482,8 @@ class FloatingBallService : AccessibilityService() {
             "btn_music"        to R.id.btn_music,
             "btn_video"        to R.id.btn_video,
             "btn_cursor"       to R.id.btn_cursor,
-            "btn_clicker"      to R.id.btn_clicker
+            "btn_clicker"      to R.id.btn_clicker,
+            "btn_note"         to R.id.btn_note
         )
 
         val activeResIds = mutableListOf<Int>()

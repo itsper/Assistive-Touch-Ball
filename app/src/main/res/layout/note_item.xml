@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/layout_note_item_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/btn_item_bg"
+    android:padding="6dp"
+    android:layout_marginBottom="4dp"
+    android:clickable="true"
+    android:focusable="true">
+
+    <!-- Top Row: Title + Action Icons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/txt_item_note_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Untitled Note"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:layout_marginEnd="4dp" />
+
+        <ImageButton
+            android:id="@+id/btn_item_note_copy"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_copy"
+            android:tint="#CCFFFFFF"
+            android:background="@drawable/btn_item_bg"
+            android:padding="2dp"
+            android:layout_marginEnd="2dp"
+            android:contentDescription="Copy Note" />
+
+        <ImageButton
+            android:id="@+id/btn_item_note_delete"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_delete"
+            android:tint="#FF8A80"
+            android:background="@drawable/btn_item_bg"
+            android:padding="2dp"
+            android:contentDescription="Delete Note" />
+    </LinearLayout>
+
+    <!-- Preview snippet -->
+    <TextView
+        android:id="@+id/txt_item_note_preview"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="No content"
+        android:textColor="#B3FFFFFF"
+        android:textSize="9.5sp"
+        android:maxLines="2"
+        android:ellipsize="end"
+        android:layout_marginTop="2dp" />
+
+    <!-- Date/Timestamp -->
+    <TextView
+        android:id="@+id/txt_item_note_date"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Just now"
+        android:textColor="#66FFFFFF"
+        android:textSize="8sp"
+        android:layout_marginTop="2dp" />
+
+</LinearLayout>

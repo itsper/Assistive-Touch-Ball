@@ -7,29 +7,30 @@ data class ToolItem(
     val label: String,
     val iconRes: Int,
     val enabledByDefault: Boolean,
-    val tintColor: Color = Color(0xFF6200EE)
+    val tintColor: Color = Color.Unspecified
 )
 
 internal val ALL_TOOLS = listOf(
-    ToolItem("btn_home",         "Home",          R.drawable.ic_home,         true,  Color(0xFF64B5F6)),
-    ToolItem("btn_back",         "Back",          R.drawable.ic_back,         true,  Color(0xFFFFB74D)),
-    ToolItem("btn_recents",      "Recents",       R.drawable.ic_recents,      true,  Color(0xFFFFF176)),
-    ToolItem("btn_screenshot",   "Screenshot",    R.drawable.ic_screenshot,   true,  Color(0xFFFF8A80)),
-    ToolItem("btn_volume",       "Volume",        R.drawable.ic_volume,       true,  Color(0xFFBA68C8)),
-    ToolItem("btn_flashlight",   "Flashlight",    R.drawable.ic_flashlight,   true,  Color(0xFF4DB6AC)),
-    ToolItem("btn_notification", "Notification",  R.drawable.ic_notification, true,  Color(0xFF81C784)),
-    ToolItem("btn_brightness",   "Brightness",    R.drawable.ic_menu_compass, true,  Color(0xFF4DD0E1)),
-    ToolItem("btn_rotate",       "Auto-Rotate",   R.drawable.ic_menu_always_landscape_portrait, true, Color(0xFFF06292)),
-    ToolItem("btn_wifi",         "Wi-Fi",         R.drawable.presence_offline,true,  Color(0xFF9FA8DA)),
-    ToolItem("btn_data",         "Mobile Data",   R.drawable.ic_menu_share,    true,  Color(0xFFA1887F)),
-    ToolItem("btn_bluetooth",    "Bluetooth",     R.drawable.ic_bluetooth,    true,  Color(0xFF90A4AE)),
-    ToolItem("btn_airplane",     "Airplane Mode", android.R.drawable.ic_menu_agenda, true, Color(0xFF7986CB)),
-    ToolItem("btn_hotspot",      "Hotspot",       android.R.drawable.ic_menu_share,  true, Color(0xFFD4E157)),
-    ToolItem("btn_onehanded",    "One-Handed",    android.R.drawable.ic_menu_crop,   true, Color(0xFFAED581)),
-    ToolItem("btn_music",        "Music",         R.drawable.ic_music,               true, Color(0xFFE91E63)),
-    ToolItem("btn_video",        "Video",         R.drawable.ic_video,               true, Color(0xFFFF5722)),
-    ToolItem("btn_cursor",       "Cursor",        R.drawable.ic_cursor,              true, Color(0xFF9C27B0)),
-    ToolItem("btn_clicker",      "Auto Clicker",  R.drawable.ic_clicker,             true, Color(0xFFE040FB))
+    ToolItem("btn_home",         "Home",          R.drawable.ic_home,         true),
+    ToolItem("btn_back",         "Back",          R.drawable.ic_back,         true),
+    ToolItem("btn_recents",      "Recents",       R.drawable.ic_recents,      true),
+    ToolItem("btn_screenshot",   "Screenshot",    R.drawable.ic_screenshot,   true),
+    ToolItem("btn_volume",       "Volume",        R.drawable.ic_volume,       true),
+    ToolItem("btn_flashlight",   "Flashlight",    R.drawable.ic_flashlight,   true),
+    ToolItem("btn_notification", "Notification",  R.drawable.ic_notification, true),
+    ToolItem("btn_brightness",   "Brightness",    R.drawable.ic_menu_compass, true),
+    ToolItem("btn_rotate",       "Auto-Rotate",   R.drawable.ic_menu_always_landscape_portrait, true),
+    ToolItem("btn_wifi",         "Wi-Fi",         R.drawable.presence_offline,true),
+    ToolItem("btn_data",         "Mobile Data",   R.drawable.ic_menu_share,    true),
+    ToolItem("btn_bluetooth",    "Bluetooth",     R.drawable.ic_bluetooth,    true),
+    ToolItem("btn_airplane",     "Airplane Mode", android.R.drawable.ic_menu_agenda, true),
+    ToolItem("btn_hotspot",      "Hotspot",       android.R.drawable.ic_menu_share,  true),
+    ToolItem("btn_onehanded",    "One-Handed",    android.R.drawable.ic_menu_crop,   true),
+    ToolItem("btn_music",        "Music",         R.drawable.ic_music,               true),
+    ToolItem("btn_video",        "Video",         R.drawable.ic_video,               true),
+    ToolItem("btn_cursor",       "Cursor",        R.drawable.ic_cursor,              true),
+    ToolItem("btn_clicker",      "Auto Clicker",  R.drawable.ic_clicker,             true),
+    ToolItem("btn_note",         "Note",          R.drawable.ic_note,                true)
 )
 
 internal const val PREF_ORDER_KEY = "tool_order"

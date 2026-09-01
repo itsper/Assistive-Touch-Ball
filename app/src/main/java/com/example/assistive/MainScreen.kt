@@ -135,9 +135,7 @@ fun MainScreen(
                     animationSpec = spring(), label = "scale"
                 )
 
-                val borderColor = remember(isEnabled, tool.tintColor) {
-                    if (isEnabled) tool.tintColor.copy(alpha = 0.4f) else Color.Transparent
-                }
+                val borderColor = if (isEnabled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f) else Color.Transparent
 
                 Box(
                     modifier = Modifier
@@ -209,7 +207,7 @@ fun MainScreen(
                                 .size(48.dp)
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(
-                                    if (isEnabled) tool.tintColor
+                                    if (isEnabled) MaterialTheme.colorScheme.onSurface
                                     else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
                                 ),
                             contentAlignment = Alignment.Center
@@ -219,8 +217,8 @@ fun MainScreen(
                                 contentDescription = tool.label,
                                 modifier = Modifier.size(24.dp),
                                 colorFilter = ColorFilter.tint(
-                                    if (isEnabled) Color.White
-                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                                    if (isEnabled) MaterialTheme.colorScheme.surface
+                                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                                 )
                             )
                         }
