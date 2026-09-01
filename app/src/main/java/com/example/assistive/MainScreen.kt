@@ -1,9 +1,6 @@
 package com.example.assistive
 
 import android.content.Context
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -13,7 +10,7 @@ import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -23,10 +20,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -61,12 +57,20 @@ fun MainScreen(
     }
 
     val activeCount = selectedMap.values.count { it }
-    var draggedIndex by remember { mutableStateOf<Int?>(null) }
+    var draggedKey by remember { mutableStateOf<String?>(null) }
     var dragOffsetX by remember { mutableFloatStateOf(0f) }
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
 
     // Cache static shapes to avoid re-allocation during grid layouts
     val cardShape = remember { RoundedCornerShape(20.dp) }
+    val iconBoxShape = remember { RoundedCornerShape(14.dp) }
+
+    // Pre-cache theme colors to prevent repeated lookups in each grid cell
+    val surfaceContainerHigh = MaterialTheme.colorScheme.surfaceContainerHigh
+    val surfaceContainerLow = MaterialTheme.colorScheme.surfaceContainerLow
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val surface = MaterialTheme.colorScheme.surface
+    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
 
     Column(
         modifier = modifier
@@ -80,7 +84,7 @@ fun MainScreen(
         Text(
             text = "Tap cards to toggle. Hold & drag to reorder your floating ball items.",
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = onSurfaceVariant,
             textAlign = TextAlign.Center,
             lineHeight = 20.sp
         )
@@ -122,121 +126,66 @@ fun MainScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            itemsIndexed(orderedTools, key = { _, t -> t.key }) { index, tool ->
+            items(
+                items = orderedTools,
+                key = { it.key }
+            ) { tool ->
                 val isEnabled = selectedMap[tool.key] ?: false
-                val isDragging = draggedIndex == index
+                val isDragging = draggedKey == tool.key
 
-                val elevation by animateDpAsState(
-                    targetValue = if (isDragging) 16.dp else 0.dp,
-                    animationSpec = spring(), label = "elevation"
-                )
-                val scale by animateFloatAsState(
-                    targetValue = if (isDragging) 1.08f else 1.0f,
-                    animationSpec = spring(), label = "scale"
-                )
-
-                val borderColor = if (isEnabled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f) else Color.Transparent
-
-                Box(
-                    modifier = Modifier
-                        .zIndex(if (isDragging) 10f else 1f)
-                        .scale(scale)
-                        .graphicsLayer {
-                            // Using graphicsLayer handles translations smoothly without triggering full recompositions
-                            translationX = if (isDragging) dragOffsetX * density else 0f
-                            translationY = if (isDragging) dragOffsetY * density else 0f
+                ToolCardItem(
+                    tool = tool,
+                    isEnabled = isEnabled,
+                    isDragging = isDragging,
+                    dragOffsetX = if (isDragging) dragOffsetX else 0f,
+                    dragOffsetY = if (isDragging) dragOffsetY else 0f,
+                    cardShape = cardShape,
+                    iconBoxShape = iconBoxShape,
+                    surfaceContainerHigh = surfaceContainerHigh,
+                    surfaceContainerLow = surfaceContainerLow,
+                    onSurface = onSurface,
+                    surface = surface,
+                    onSurfaceVariant = onSurfaceVariant,
+                    onToggle = {
+                        val nextState = !isEnabled
+                        selectedMap[tool.key] = nextState
+                        scope.launch(Dispatchers.IO) {
+                            prefs.edit().putBoolean(tool.key, nextState).apply()
                         }
-                        .animateItem()
-                        .shadow(elevation, cardShape)
-                        .clip(cardShape)
-                        .background(
-                            if (isEnabled) MaterialTheme.colorScheme.surfaceContainerHigh
-                            else MaterialTheme.colorScheme.surfaceContainerLow
-                        )
-                        .border(width = 1.5.dp, color = borderColor, shape = cardShape)
-                        .clickable {
-                            val nextState = !isEnabled
-                            selectedMap[tool.key] = nextState
-                            // Offload disk I/O write to background thread
-                            scope.launch(Dispatchers.IO) {
-                                prefs.edit().putBoolean(tool.key, nextState).apply()
+                    },
+                    onDragStart = {
+                        draggedKey = tool.key
+                        dragOffsetX = 0f
+                        dragOffsetY = 0f
+                    },
+                    onDrag = { _, dragAmount ->
+                        dragOffsetX += dragAmount.x
+                        dragOffsetY += dragAmount.y
+
+                        val currentIdx = orderedTools.indexOfFirst { it.key == draggedKey }
+                        if (currentIdx != -1) {
+                            val colOffset = (dragOffsetX / 220f).toInt()
+                            val rowOffset = (dragOffsetY / 260f).toInt()
+                            val targetIndex = (currentIdx + rowOffset * 3 + colOffset)
+                                .coerceIn(0, orderedTools.lastIndex)
+
+                            if (targetIndex != currentIdx) {
+                                orderedTools.add(targetIndex, orderedTools.removeAt(currentIdx))
+                                dragOffsetX = 0f
+                                dragOffsetY = 0f
                             }
                         }
-                        .pointerInput(Unit) {
-                            detectDragGesturesAfterLongPress(
-                                onDragStart = {
-                                    draggedIndex = orderedTools.indexOf(tool)
-                                    dragOffsetX = 0f
-                                    dragOffsetY = 0f
-                                },
-                                onDrag = { change, dragAmount ->
-                                    change.consume()
-                                    dragOffsetX += dragAmount.x / density
-                                    dragOffsetY += dragAmount.y / density
-
-                                    val currentIdx = draggedIndex ?: return@detectDragGesturesAfterLongPress
-
-                                    val colOffset = (dragOffsetX / 85f).toInt()
-                                    val rowOffset = (dragOffsetY / 95f).toInt()
-                                    val targetIndex = (currentIdx + rowOffset * 3 + colOffset)
-                                        .coerceIn(0, orderedTools.lastIndex)
-
-                                    if (targetIndex != currentIdx) {
-                                        orderedTools.add(targetIndex, orderedTools.removeAt(currentIdx))
-                                        draggedIndex = targetIndex
-                                        dragOffsetX = 0f
-                                        dragOffsetY = 0f
-                                    }
-                                },
-                                onDragEnd = {
-                                    draggedIndex = null
-                                    // Offload heavy save sequence to background thread
-                                    scope.launch(Dispatchers.IO) {
-                                        saveOrder(prefs, orderedTools)
-                                    }
-                                },
-                                onDragCancel = { draggedIndex = null }
-                            )
+                    },
+                    onDragEnd = {
+                        draggedKey = null
+                        scope.launch(Dispatchers.IO) {
+                            saveOrder(prefs, orderedTools)
                         }
-                        .padding(vertical = 18.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(
-                                    if (isEnabled) MaterialTheme.colorScheme.onSurface
-                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Image(
-                                painter = painterResource(id = tool.iconRes),
-                                contentDescription = tool.label,
-                                modifier = Modifier.size(24.dp),
-                                colorFilter = ColorFilter.tint(
-                                    if (isEnabled) MaterialTheme.colorScheme.surface
-                                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                )
-                            )
-                        }
-
-                        Spacer(Modifier.height(10.dp))
-
-                        Text(
-                            text = tool.label,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (isEnabled) MaterialTheme.colorScheme.onSurface
-                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                            textAlign = TextAlign.Center,
-                            maxLines = 1,
-                            modifier = Modifier.padding(horizontal = 4.dp)
-                        )
+                    },
+                    onDragCancel = {
+                        draggedKey = null
                     }
-                }
+                )
             }
         }
 
@@ -270,6 +219,100 @@ fun MainScreen(
             ) {
                 Text("Close Assistive Engine", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             }
+        }
+    }
+}
+
+@Composable
+private fun ToolCardItem(
+    tool: ToolItem,
+    isEnabled: Boolean,
+    isDragging: Boolean,
+    dragOffsetX: Float,
+    dragOffsetY: Float,
+    cardShape: Shape,
+    iconBoxShape: Shape,
+    surfaceContainerHigh: Color,
+    surfaceContainerLow: Color,
+    onSurface: Color,
+    surface: Color,
+    onSurfaceVariant: Color,
+    onToggle: () -> Unit,
+    onDragStart: () -> Unit,
+    onDrag: (androidx.compose.ui.input.pointer.PointerInputChange, androidx.compose.ui.geometry.Offset) -> Unit,
+    onDragEnd: () -> Unit,
+    onDragCancel: () -> Unit
+) {
+    val borderColor = remember(isEnabled, onSurface) {
+        if (isEnabled) onSurface.copy(alpha = 0.25f) else Color.Transparent
+    }
+
+    Box(
+        modifier = Modifier
+            .zIndex(if (isDragging) 10f else 1f)
+            .graphicsLayer {
+                if (isDragging) {
+                    scaleX = 1.06f
+                    scaleY = 1.06f
+                    shadowElevation = 16.dp.toPx()
+                    shape = cardShape
+                    clip = true
+                    translationX = dragOffsetX
+                    translationY = dragOffsetY
+                }
+            }
+            .clip(cardShape)
+            .background(if (isEnabled) surfaceContainerHigh else surfaceContainerLow)
+            .border(width = 1.5.dp, color = borderColor, shape = cardShape)
+            .clickable(onClick = onToggle)
+            .pointerInput(tool.key) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { onDragStart() },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        onDrag(change, dragAmount)
+                    },
+                    onDragEnd = { onDragEnd() },
+                    onDragCancel = { onDragCancel() }
+                )
+            }
+            .padding(vertical = 18.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(iconBoxShape)
+                    .background(
+                        if (isEnabled) onSurface
+                        else onSurface.copy(alpha = 0.08f)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(id = tool.iconRes),
+                    contentDescription = tool.label,
+                    modifier = Modifier.size(24.dp),
+                    colorFilter = ColorFilter.tint(
+                        if (isEnabled) surface
+                        else onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                )
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            Text(
+                text = tool.label,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (isEnabled) onSurface
+                else onSurface.copy(alpha = 0.5f),
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
         }
     }
 }
