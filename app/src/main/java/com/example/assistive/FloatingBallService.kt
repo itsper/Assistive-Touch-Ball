@@ -6,6 +6,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.hardware.camera2.CameraManager
 import android.media.AudioManager
@@ -120,7 +121,8 @@ class FloatingBallService : AccessibilityService() {
             layoutType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+                    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
+                    WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -210,6 +212,49 @@ class FloatingBallService : AccessibilityService() {
         serviceJob.cancel()
     }
 
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        handleConfigurationChanged()
+    }
+
+    private fun handleConfigurationChanged() {
+        val displayMetrics = resources.displayMetrics
+        val screenWidth = displayMetrics.widthPixels
+        val screenHeight = displayMetrics.heightPixels
+        val density = displayMetrics.density
+        val ballSizePx = (60 * density).toInt()
+        val pad = (8 * density).toInt()
+
+        // Clamp floating ball position within the new screen boundaries
+        ballParams.x = ballParams.x.coerceIn(0, (screenWidth - ballSizePx).coerceAtLeast(0))
+        ballParams.y = ballParams.y.coerceIn(0, (screenHeight - ballSizePx).coerceAtLeast(0))
+        if (isBallVisible) {
+            try {
+                windowManager.updateViewLayout(ballView, ballParams)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        // If floating menu is open, handle orientation adaptively
+        if (isMenuVisible) {
+            val browserContainer = menuView.findViewById<View?>(R.id.layout_browser_container)
+            if (browserContainer != null && browserContainer.visibility == View.VISIBLE) {
+                browserManager.onConfigurationChanged()
+            } else {
+                val menuWidthPx = (224 * density).toInt()
+                val menuHeightPx = (258 * density).toInt()
+                menuParams.x = menuParams.x.coerceIn(pad, (screenWidth - menuWidthPx - pad).coerceAtLeast(pad))
+                menuParams.y = menuParams.y.coerceIn(pad, (screenHeight - menuHeightPx - pad).coerceAtLeast(pad))
+                try {
+                    windowManager.updateViewLayout(menuView, menuParams)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
+
     internal fun addBallView() {
         if (!isBallVisible) { windowManager.addView(ballView, ballParams); isBallVisible = true }
     }
@@ -243,6 +288,7 @@ class FloatingBallService : AccessibilityService() {
         } else {
             menuParams.flags = menuParams.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
         }
+        menuParams.flags = menuParams.flags or WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
         if (isMenuVisible) {
             try {
                 windowManager.updateViewLayout(menuView, menuParams)
