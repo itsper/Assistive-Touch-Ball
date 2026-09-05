@@ -30,7 +30,8 @@ internal val ALL_TOOLS = listOf(
     ToolItem("btn_video",        "Video",         R.drawable.ic_video,               true),
     ToolItem("btn_cursor",       "Cursor",        R.drawable.ic_cursor,              true),
     ToolItem("btn_clicker",      "Auto Clicker",  R.drawable.ic_clicker,             true),
-    ToolItem("btn_note",         "Note",          R.drawable.ic_note,                true)
+    ToolItem("btn_note",         "Note",          R.drawable.ic_note,                true),
+    ToolItem("btn_search",       "Search",        R.drawable.ic_search,              true)
 )
 
 internal const val PREF_ORDER_KEY = "tool_order"
