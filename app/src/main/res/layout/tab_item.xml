@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/layout_tab_card_root"
+    android:layout_width="match_parent"
+    android:layout_height="140dp"
+    android:orientation="vertical"
+    android:background="@drawable/bg_tab_card"
+    android:clipToOutline="true"
+    android:layout_margin="3.5dp"
+    android:clickable="true"
+    android:focusable="true">
+
+    <!-- Card Top Header: Title + Close Button -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="24dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="#22FFFFFF"
+        android:paddingStart="6dp"
+        android:paddingEnd="2dp">
+
+        <TextView
+            android:id="@+id/txt_tab_card_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="New Tab"
+            android:textColor="#FFFFFF"
+            android:textSize="9.5sp"
+            android:textStyle="bold"
+            android:singleLine="true"
+            android:ellipsize="end" />
+
+        <ImageButton
+            android:id="@+id/btn_tab_card_close"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:src="@drawable/ic_close"
+            android:tint="#CCFFFFFF"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:padding="4dp"
+            android:contentDescription="Close tab" />
+    </LinearLayout>
+
+    <!-- Thumbnail Preview / Web Snapshot Container -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="#15000000">
+
+        <!-- Actual web page snapshot image -->
+        <ImageView
+            android:id="@+id/img_tab_preview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop" />
+
+        <!-- Fallback if snapshot is pending or empty -->
+        <LinearLayout
+            android:id="@+id/layout_tab_placeholder"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:src="@drawable/ic_search"
+                android:tint="#44FFFFFF"
+                android:contentDescription="Search" />
+
+            <TextView
+                android:id="@+id/txt_tab_placeholder_url"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="google.com"
+                android:textColor="#66FFFFFF"
+                android:textSize="8.5sp"
+                android:singleLine="true"
+                android:ellipsize="middle"
+                android:layout_marginTop="3dp"
+                android:paddingHorizontal="4dp" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- Bottom URL Bar on Card -->
+    <TextView
+        android:id="@+id/txt_tab_card_url"
+        android:layout_width="match_parent"
+        android:layout_height="17dp"
+        android:text="https://www.google.com"
+        android:textColor="#88FFFFFF"
+        android:textSize="8sp"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:gravity="center_vertical"
+        android:background="#1C000000"
+        android:paddingHorizontal="5dp" />
+</LinearLayout>

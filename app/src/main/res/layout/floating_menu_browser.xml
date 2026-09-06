@@ -234,6 +234,125 @@
         </LinearLayout>
     </FrameLayout>
 
+    <!-- Tabs Switcher Grid Layout -->
+    <LinearLayout
+        android:id="@+id/layout_tab_switcher"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:layout_marginTop="2dp"
+        android:layout_marginBottom="2dp"
+        android:visibility="gone">
+
+        <!-- Switcher Header Actions -->
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="26dp"
+            android:layout_marginBottom="3dp">
+
+            <TextView
+                android:id="@+id/txt_tab_switcher_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Tabs (1)"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:layout_alignParentStart="true"
+                android:layout_centerVertical="true"
+                android:layout_marginStart="2dp" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:layout_alignParentEnd="true"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <!-- Close All Tabs Button -->
+                <TextView
+                    android:id="@+id/btn_tabs_close_all"
+                    android:layout_width="wrap_content"
+                    android:layout_height="22dp"
+                    android:text="Close All"
+                    android:textColor="#FF8A80"
+                    android:textSize="9sp"
+                    android:gravity="center"
+                    android:background="@drawable/btn_item_bg"
+                    android:paddingHorizontal="6dp"
+                    android:layout_marginEnd="4dp"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <!-- Add New Tab Button -->
+                <TextView
+                    android:id="@+id/btn_tabs_add_new"
+                    android:layout_width="wrap_content"
+                    android:layout_height="22dp"
+                    android:text="+ New Tab"
+                    android:textColor="#4FC3F7"
+                    android:textSize="9.5sp"
+                    android:textStyle="bold"
+                    android:gravity="center"
+                    android:background="@drawable/btn_item_bg"
+                    android:paddingHorizontal="7dp"
+                    android:clickable="true"
+                    android:focusable="true" />
+            </LinearLayout>
+        </RelativeLayout>
+
+        <!-- Tabs Grid RecyclerView -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recycler_tabs"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:scrollbars="vertical"
+            android:fadeScrollbars="false" />
+
+        <!-- Empty State -->
+        <LinearLayout
+            android:id="@+id/layout_empty_tabs"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:src="@drawable/ic_search"
+                android:tint="#55FFFFFF"
+                android:contentDescription="No tabs" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="No tabs open"
+                android:textColor="#77FFFFFF"
+                android:textSize="10sp"
+                android:layout_marginTop="4dp" />
+
+            <TextView
+                android:id="@+id/btn_tabs_empty_new"
+                android:layout_width="wrap_content"
+                android:layout_height="24dp"
+                android:text="+ Open New Tab"
+                android:textColor="#4FC3F7"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:background="@drawable/btn_item_bg"
+                android:paddingHorizontal="10dp"
+                android:gravity="center"
+                android:layout_marginTop="6dp"
+                android:clickable="true"
+                android:focusable="true" />
+        </LinearLayout>
+    </LinearLayout>
+
     <!-- Bottom Navigation Controls Toolbar -->
     <LinearLayout
         android:id="@+id/layout_browser_bottom_toolbar"
@@ -295,18 +414,31 @@
             android:layout_marginHorizontal="2dp"
             android:contentDescription="Home page" />
 
-        <!-- Open in external browser app -->
-        <ImageButton
-            android:id="@+id/btn_web_open_external"
+        <!-- Browser Tabs Switcher Button -->
+        <FrameLayout
+            android:id="@+id/btn_web_tabs"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:src="@drawable/ic_open_in_browser"
-            android:tint="#FFFFFF"
             android:background="@drawable/btn_item_bg"
-            android:padding="5dp"
             android:layout_marginStart="2dp"
-            android:contentDescription="Open in external browser" />
+            android:clickable="true"
+            android:focusable="true"
+            android:contentDescription="Tabs">
+
+            <TextView
+                android:id="@+id/txt_tab_count_badge"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_tab_badge"
+                android:textColor="#FFFFFF"
+                android:textSize="9.5sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:text="1" />
+        </FrameLayout>
     </LinearLayout>
 
 </LinearLayout>

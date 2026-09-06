@@ -5,10 +5,12 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.net.Uri
 import android.os.Build
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.ContextThemeWrapper
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
@@ -17,6 +19,9 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.webkit.*
 import android.widget.*
+import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.ItemTouchHelper
+import androidx.recyclerview.widget.RecyclerView
 import java.net.URLEncoder
 
 class BrowserManager(
@@ -37,6 +42,16 @@ class BrowserManager(
     private lateinit var layoutBrowserBottomToolbar: LinearLayout
     private lateinit var layoutError: View
 
+    // Tab Switcher Container & Views
+    private lateinit var layoutTabSwitcher: LinearLayout
+    private lateinit var txtTabSwitcherCount: TextView
+    private lateinit var btnTabsCloseAll: TextView
+    private lateinit var btnTabsAddNew: TextView
+    private lateinit var recyclerTabs: RecyclerView
+    private lateinit var layoutEmptyTabs: LinearLayout
+    private lateinit var btnTabsEmptyNew: TextView
+    private var tabsAdapter: TabsAdapter? = null
+
     // Header elements
     private lateinit var btnBackToMenu: ImageButton
     private lateinit var txtTitle: TextView
@@ -53,8 +68,7 @@ class BrowserManager(
     private lateinit var btnGo: TextView
     private lateinit var progressBar: ProgressBar
 
-    // WebView & Video Custom View
-    private lateinit var webView: WebView
+    // Error View & Video Custom View
     private lateinit var txtErrorMsg: TextView
     private lateinit var btnRetry: TextView
     private var customView: View? = null
@@ -65,13 +79,20 @@ class BrowserManager(
     private lateinit var btnWebForward: ImageButton
     private lateinit var btnWebRefresh: ImageButton
     private lateinit var btnWebHome: ImageButton
-    private lateinit var btnWebOpenExternal: ImageButton
+    private lateinit var btnWebTabs: FrameLayout
+    private lateinit var txtTabCountBadge: TextView
 
-    // State
+    // Tab State
+    private val tabsList = mutableListOf<BrowserTab>()
+    private var activeTabIndex = 0
+    val activeTab: BrowserTab?
+        get() = tabsList.getOrNull(activeTabIndex)
+
+    // View State
+    private var isTabSwitcherOpen = false
     private var isExpanded = false
     private var areBarsHidden = false
     private var isLoading = false
-    private var lastFailedUrl: String? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     fun init() {
@@ -97,33 +118,83 @@ class BrowserManager(
         btnGo = layoutBrowserContainer.findViewById(R.id.btn_browser_go)
         progressBar = layoutBrowserContainer.findViewById(R.id.progress_browser)
 
-        // WebView & Error View
-        webView = layoutBrowserContainer.findViewById(R.id.webview_browser)
+        // Error View
         layoutError = layoutBrowserContainer.findViewById(R.id.layout_browser_error)
         txtErrorMsg = layoutBrowserContainer.findViewById(R.id.txt_browser_error_msg)
         btnRetry = layoutBrowserContainer.findViewById(R.id.btn_browser_retry)
+
+        // Tab Switcher Views
+        layoutTabSwitcher = layoutBrowserContainer.findViewById(R.id.layout_tab_switcher)
+        txtTabSwitcherCount = layoutBrowserContainer.findViewById(R.id.txt_tab_switcher_count)
+        btnTabsCloseAll = layoutBrowserContainer.findViewById(R.id.btn_tabs_close_all)
+        btnTabsAddNew = layoutBrowserContainer.findViewById(R.id.btn_tabs_add_new)
+        recyclerTabs = layoutBrowserContainer.findViewById(R.id.recycler_tabs)
+        layoutEmptyTabs = layoutBrowserContainer.findViewById(R.id.layout_empty_tabs)
+        btnTabsEmptyNew = layoutBrowserContainer.findViewById(R.id.btn_tabs_empty_new)
 
         // Bottom toolbar
         btnWebBack = layoutBrowserContainer.findViewById(R.id.btn_web_back)
         btnWebForward = layoutBrowserContainer.findViewById(R.id.btn_web_forward)
         btnWebRefresh = layoutBrowserContainer.findViewById(R.id.btn_web_refresh)
         btnWebHome = layoutBrowserContainer.findViewById(R.id.btn_web_home)
-        btnWebOpenExternal = layoutBrowserContainer.findViewById(R.id.btn_web_open_external)
+        btnWebTabs = layoutBrowserContainer.findViewById(R.id.btn_web_tabs)
+        txtTabCountBadge = layoutBrowserContainer.findViewById(R.id.txt_tab_count_badge)
 
-        setupWebView()
+        setupTabRecyclerView()
+
+        // Initialize Tab 1 using the initial WebView from layout
+        val initialWv = layoutWebviewContainer.findViewById<WebView>(R.id.webview_browser)
+        val firstTab = BrowserTab(
+            title = "Google",
+            url = DEFAULT_HOME_URL,
+            webView = initialWv
+        )
+        setupWebView(initialWv, firstTab)
+        tabsList.add(firstTab)
+        activeTabIndex = 0
+        updateTabCountBadge()
+
         setupListeners()
         setupDragToMove()
         applyAdaptiveDimensions()
         updateNavigationButtonsState()
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun setupWebView() {
-        // Force hardware acceleration layer on webview
-        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-        webView.keepScreenOn = true
+    private fun setupTabRecyclerView() {
+        recyclerTabs.layoutManager = GridLayoutManager(service, 2)
+        tabsAdapter = TabsAdapter(
+            tabs = tabsList,
+            activeTabIndex = activeTabIndex,
+            onTabClick = { pos -> selectTab(pos) },
+            onCloseClick = { pos -> closeTab(pos) }
+        )
+        recyclerTabs.adapter = tabsAdapter
 
-        webView.settings.apply {
+        // Enable swipe to delete on tab cards!
+        val swipeHandler = object : ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT) {
+            override fun onMove(
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                target: RecyclerView.ViewHolder
+            ): Boolean = false
+
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
+                val position = viewHolder.bindingAdapterPosition
+                if (position != RecyclerView.NO_POSITION && position < tabsList.size) {
+                    closeTab(position)
+                }
+            }
+        }
+        val itemTouchHelper = ItemTouchHelper(swipeHandler)
+        itemTouchHelper.attachToRecyclerView(recyclerTabs)
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun setupWebView(wv: WebView, tab: BrowserTab) {
+        wv.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        wv.keepScreenOn = true
+
+        wv.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
             useWideViewPort = true
@@ -151,10 +222,10 @@ class BrowserManager(
 
         CookieManager.getInstance().setAcceptCookie(true)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
+            CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
         }
 
-        webView.webViewClient = object : WebViewClient() {
+        wv.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return false
                 if (url.startsWith("http://") || url.startsWith("https://")) {
@@ -174,37 +245,54 @@ class BrowserManager(
 
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
-                isLoading = true
-                progressBar.visibility = View.VISIBLE
-                progressBar.progress = 10
-                btnWebRefresh.setImageResource(R.drawable.ic_close)
-                layoutError.visibility = View.GONE
+                tab.url = url ?: ""
+                if (tab == activeTab) {
+                    isLoading = true
+                    progressBar.visibility = View.VISIBLE
+                    progressBar.progress = 10
+                    btnWebRefresh.setImageResource(R.drawable.ic_close)
+                    layoutError.visibility = View.GONE
 
-                if (!edtUrl.hasFocus() && !url.isNullOrEmpty()) {
-                    edtUrl.setText(url)
+                    if (!edtUrl.hasFocus() && !url.isNullOrEmpty()) {
+                        edtUrl.setText(url)
+                    }
+                    updateNavigationButtonsState()
                 }
-                updateNavigationButtonsState()
-                injectMediaKeepAliveScript()
+                injectMediaKeepAliveScript(wv)
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                isLoading = false
-                progressBar.visibility = View.GONE
-                btnWebRefresh.setImageResource(R.drawable.ic_refresh)
-
+                tab.url = view?.url ?: url ?: ""
                 val pageTitle = view?.title
                 if (!pageTitle.isNullOrBlank()) {
-                    txtTitle.text = pageTitle
-                } else {
-                    txtTitle.text = "Web Browser"
+                    tab.title = pageTitle
                 }
 
-                if (!edtUrl.hasFocus() && !url.isNullOrEmpty()) {
-                    edtUrl.setText(url)
+                if (tab == activeTab) {
+                    isLoading = false
+                    progressBar.visibility = View.GONE
+                    btnWebRefresh.setImageResource(R.drawable.ic_refresh)
+
+                    if (!isTabSwitcherOpen) {
+                        txtTitle.text = if (!pageTitle.isNullOrBlank()) pageTitle else "Web Browser"
+                    }
+
+                    if (!edtUrl.hasFocus() && !url.isNullOrEmpty()) {
+                        edtUrl.setText(url)
+                    }
+                    updateNavigationButtonsState()
                 }
-                updateNavigationButtonsState()
-                injectMediaKeepAliveScript()
+
+                injectMediaKeepAliveScript(wv)
+                captureTabThumbnail(tab)
+
+                if (isTabSwitcherOpen) {
+                    val idx = tabsList.indexOf(tab)
+                    if (idx != -1) {
+                        tabsAdapter?.notifyItemChanged(idx)
+                    }
+                }
             }
 
             override fun onReceivedError(
@@ -214,9 +302,11 @@ class BrowserManager(
             ) {
                 super.onReceivedError(view, request, error)
                 if (request?.isForMainFrame == true) {
-                    lastFailedUrl = request.url?.toString()
-                    layoutError.visibility = View.VISIBLE
-                    txtErrorMsg.text = error?.description?.toString() ?: "Connection error"
+                    tab.lastFailedUrl = request.url?.toString()
+                    if (tab == activeTab) {
+                        layoutError.visibility = View.VISIBLE
+                        txtErrorMsg.text = error?.description?.toString() ?: "Connection error"
+                    }
                 }
             }
 
@@ -229,31 +319,44 @@ class BrowserManager(
             ) {
                 super.onReceivedError(view, errorCode, description, failingUrl)
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-                    lastFailedUrl = failingUrl
-                    layoutError.visibility = View.VISIBLE
-                    txtErrorMsg.text = description ?: "Connection error"
+                    tab.lastFailedUrl = failingUrl
+                    if (tab == activeTab) {
+                        layoutError.visibility = View.VISIBLE
+                        txtErrorMsg.text = description ?: "Connection error"
+                    }
                 }
             }
         }
 
-        webView.webChromeClient = object : WebChromeClient() {
+        wv.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                 super.onProgressChanged(view, newProgress)
-                progressBar.progress = newProgress
-                if (newProgress >= 100) {
-                    progressBar.visibility = View.GONE
-                } else {
-                    progressBar.visibility = View.VISIBLE
+                if (tab == activeTab) {
+                    progressBar.progress = newProgress
+                    if (newProgress >= 100) {
+                        progressBar.visibility = View.GONE
+                    } else {
+                        progressBar.visibility = View.VISIBLE
+                    }
                 }
                 if (newProgress >= 40) {
-                    injectMediaKeepAliveScript()
+                    injectMediaKeepAliveScript(wv)
                 }
             }
 
             override fun onReceivedTitle(view: WebView?, title: String?) {
                 super.onReceivedTitle(view, title)
                 if (!title.isNullOrBlank()) {
-                    txtTitle.text = title
+                    tab.title = title
+                    if (tab == activeTab && !isTabSwitcherOpen) {
+                        txtTitle.text = title
+                    }
+                    if (isTabSwitcherOpen) {
+                        val idx = tabsList.indexOf(tab)
+                        if (idx != -1) {
+                            tabsAdapter?.notifyItemChanged(idx)
+                        }
+                    }
                 }
             }
 
@@ -266,7 +369,7 @@ class BrowserManager(
                 }
                 customView = view
                 customViewCallback = callback
-                webView.visibility = View.GONE
+                wv.visibility = View.GONE
                 layoutWebviewContainer.addView(
                     customView,
                     ViewGroup.LayoutParams(
@@ -284,8 +387,251 @@ class BrowserManager(
                 }
                 customViewCallback?.onCustomViewHidden()
                 customViewCallback = null
-                webView.visibility = View.VISIBLE
+                wv.visibility = View.VISIBLE
             }
+        }
+    }
+
+    private fun createWebView(): WebView {
+        val themedContext = ContextThemeWrapper(service, R.style.Theme_Assistive)
+        val wv = WebView(themedContext)
+        wv.layoutParams = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        )
+        wv.scrollBarStyle = View.SCROLLBARS_INSIDE_OVERLAY
+        wv.isVerticalScrollBarEnabled = true
+        return wv
+    }
+
+    fun addNewTab(url: String = DEFAULT_HOME_URL) {
+        // Save thumbnail and pause current tab
+        activeTab?.let {
+            captureTabThumbnail(it)
+            it.webView.onPause()
+            layoutWebviewContainer.removeView(it.webView)
+        }
+
+        val newWv = createWebView()
+        val newTab = BrowserTab(
+            title = "New Tab",
+            url = url,
+            webView = newWv
+        )
+        setupWebView(newWv, newTab)
+        tabsList.add(newTab)
+        activeTabIndex = tabsList.size - 1
+
+        // Add WebView at index 0 so unhide button and error view stay on top
+        layoutWebviewContainer.addView(newWv, 0)
+        newWv.onResume()
+        newWv.loadUrl(url)
+
+        updateTabCountBadge()
+
+        if (isTabSwitcherOpen) {
+            closeTabSwitcher()
+        } else {
+            txtTitle.text = newTab.title
+            edtUrl.setText(newTab.url)
+            updateNavigationButtonsState()
+        }
+    }
+
+    fun selectTab(index: Int) {
+        if (index !in tabsList.indices) return
+
+        if (index == activeTabIndex) {
+            if (isTabSwitcherOpen) closeTabSwitcher()
+            return
+        }
+
+        // Save thumbnail and detach current tab
+        activeTab?.let {
+            captureTabThumbnail(it)
+            it.webView.onPause()
+            layoutWebviewContainer.removeView(it.webView)
+        }
+
+        activeTabIndex = index
+        val selectedTab = tabsList[index]
+        if (selectedTab.webView.parent == null) {
+            layoutWebviewContainer.addView(selectedTab.webView, 0)
+        }
+        selectedTab.webView.onResume()
+
+        if (isTabSwitcherOpen) {
+            closeTabSwitcher()
+        } else {
+            txtTitle.text = if (selectedTab.title.isNotBlank()) selectedTab.title else "Web Browser"
+            edtUrl.setText(selectedTab.url)
+            updateNavigationButtonsState()
+            layoutError.visibility = if (selectedTab.lastFailedUrl != null) View.VISIBLE else View.GONE
+        }
+    }
+
+    fun closeTab(index: Int) {
+        if (index !in tabsList.indices) return
+
+        val tabToClose = tabsList[index]
+        val isClosingActive = (index == activeTabIndex)
+
+        // Clean up WebView
+        try {
+            tabToClose.webView.stopLoading()
+            tabToClose.webView.loadUrl("about:blank")
+            tabToClose.webView.clearHistory()
+            (tabToClose.webView.parent as? ViewGroup)?.removeView(tabToClose.webView)
+            tabToClose.webView.destroy()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        tabToClose.thumbnail?.recycle()
+        tabToClose.thumbnail = null
+
+        tabsList.removeAt(index)
+
+        if (tabsList.isEmpty()) {
+            activeTabIndex = 0
+            updateTabCountBadge()
+            if (isTabSwitcherOpen) {
+                txtTabSwitcherCount.text = "Tabs (0)"
+                layoutEmptyTabs.visibility = View.VISIBLE
+                recyclerTabs.visibility = View.GONE
+                tabsAdapter?.notifyDataSetChanged()
+            } else {
+                addNewTab(DEFAULT_HOME_URL)
+            }
+            return
+        }
+
+        if (isClosingActive) {
+            activeTabIndex = (index - 1).coerceAtLeast(0).coerceAtMost(tabsList.size - 1)
+            val newActive = tabsList[activeTabIndex]
+            if (!isTabSwitcherOpen) {
+                if (newActive.webView.parent == null) {
+                    layoutWebviewContainer.addView(newActive.webView, 0)
+                }
+                newActive.webView.onResume()
+                txtTitle.text = if (newActive.title.isNotBlank()) newActive.title else "Web Browser"
+                edtUrl.setText(newActive.url)
+                updateNavigationButtonsState()
+                layoutError.visibility = if (newActive.lastFailedUrl != null) View.VISIBLE else View.GONE
+            }
+        } else if (index < activeTabIndex) {
+            activeTabIndex--
+        }
+
+        updateTabCountBadge()
+
+        if (isTabSwitcherOpen) {
+            txtTabSwitcherCount.text = "Tabs (${tabsList.size})"
+            tabsAdapter?.updateActiveIndex(activeTabIndex)
+            tabsAdapter?.notifyItemRemoved(index)
+            tabsAdapter?.notifyItemRangeChanged(index, tabsList.size - index)
+        }
+    }
+
+    fun closeAllTabs() {
+        for (tab in tabsList) {
+            try {
+                tab.webView.stopLoading()
+                tab.webView.loadUrl("about:blank")
+                tab.webView.clearHistory()
+                (tab.webView.parent as? ViewGroup)?.removeView(tab.webView)
+                tab.webView.destroy()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            tab.thumbnail?.recycle()
+            tab.thumbnail = null
+        }
+        tabsList.clear()
+        activeTabIndex = 0
+        updateTabCountBadge()
+        txtTabSwitcherCount.text = "Tabs (0)"
+        layoutEmptyTabs.visibility = View.VISIBLE
+        recyclerTabs.visibility = View.GONE
+        tabsAdapter?.notifyDataSetChanged()
+    }
+
+    private fun openTabSwitcher() {
+        if (isTabSwitcherOpen) return
+        isTabSwitcherOpen = true
+        hideKeyboard()
+
+        // Capture snapshot of current tab
+        activeTab?.let {
+            captureTabThumbnail(it)
+        }
+
+        layoutBrowserOmnibox.visibility = View.GONE
+        progressBar.visibility = View.GONE
+        layoutWebviewContainer.visibility = View.GONE
+        layoutTabSwitcher.visibility = View.VISIBLE
+
+        txtTitle.text = "Tabs (${tabsList.size})"
+        txtTabSwitcherCount.text = "Tabs (${tabsList.size})"
+
+        layoutEmptyTabs.visibility = if (tabsList.isEmpty()) View.VISIBLE else View.GONE
+        recyclerTabs.visibility = if (tabsList.isEmpty()) View.GONE else View.VISIBLE
+
+        txtTabCountBadge.setBackgroundResource(R.drawable.bg_tab_badge_active)
+        txtTabCountBadge.setTextColor(0xFF4FC3F7.toInt())
+
+        tabsAdapter?.updateActiveIndex(activeTabIndex)
+        tabsAdapter?.notifyDataSetChanged()
+    }
+
+    private fun closeTabSwitcher() {
+        if (!isTabSwitcherOpen) return
+        if (tabsList.isEmpty()) {
+            addNewTab(DEFAULT_HOME_URL)
+            return
+        }
+
+        isTabSwitcherOpen = false
+        layoutTabSwitcher.visibility = View.GONE
+        layoutBrowserOmnibox.visibility = View.VISIBLE
+        layoutWebviewContainer.visibility = View.VISIBLE
+
+        txtTabCountBadge.setBackgroundResource(R.drawable.bg_tab_badge)
+        txtTabCountBadge.setTextColor(0xFFFFFFFF.toInt())
+
+        val current = activeTab
+        if (current != null) {
+            if (current.webView.parent == null) {
+                layoutWebviewContainer.addView(current.webView, 0)
+            }
+            current.webView.onResume()
+            txtTitle.text = if (current.title.isNotBlank()) current.title else "Web Browser"
+            edtUrl.setText(current.url)
+            updateNavigationButtonsState()
+            layoutError.visibility = if (current.lastFailedUrl != null) View.VISIBLE else View.GONE
+        }
+    }
+
+    private fun updateTabCountBadge() {
+        txtTabCountBadge.text = tabsList.size.toString()
+    }
+
+    private fun captureTabThumbnail(tab: BrowserTab) {
+        try {
+            val wv = tab.webView
+            val w = wv.width
+            val h = wv.height
+            if (w > 0 && h > 0) {
+                val scale = (240f / w).coerceAtMost(1f)
+                val thumbW = (w * scale).toInt().coerceAtLeast(1)
+                val thumbH = (h * scale).toInt().coerceAtLeast(1)
+                val bitmap = Bitmap.createBitmap(thumbW, thumbH, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bitmap)
+                canvas.scale(scale, scale)
+                wv.draw(canvas)
+                tab.thumbnail = bitmap
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
@@ -293,7 +639,8 @@ class BrowserManager(
      * Injects JavaScript into the web page to prevent YouTube / YouTube Shorts from pausing
      * automatically during window blur, layout resize, or background checks.
      */
-    private fun injectMediaKeepAliveScript() {
+    private fun injectMediaKeepAliveScript(targetWebView: WebView? = activeTab?.webView) {
+        val wv = targetWebView ?: return
         val js = """
             (function() {
                 // 1. Override Document prototype properties
@@ -354,13 +701,17 @@ class BrowserManager(
                 patchVideos();
             })();
         """.trimIndent()
-        webView.evaluateJavascript(js, null)
+        wv.evaluateJavascript(js, null)
     }
 
     private fun setupListeners() {
-        // Back to main floating menu
+        // Back button in header: closes tab switcher if open, otherwise exits back to floating menu
         btnBackToMenu.setOnClickListener {
-            closeBrowserPanel()
+            if (isTabSwitcherOpen) {
+                closeTabSwitcher()
+            } else {
+                closeBrowserPanel()
+            }
         }
 
         // Close entire floating overlay
@@ -429,50 +780,70 @@ class BrowserManager(
         // Retry on error
         btnRetry.setOnClickListener {
             layoutError.visibility = View.GONE
-            if (!lastFailedUrl.isNullOrEmpty()) {
-                webView.loadUrl(lastFailedUrl!!)
+            val current = activeTab ?: return@setOnClickListener
+            if (!current.lastFailedUrl.isNullOrEmpty()) {
+                current.webView.loadUrl(current.lastFailedUrl!!)
             } else {
-                webView.reload()
+                current.webView.reload()
             }
+        }
+
+        // Tab Switcher Header Actions
+        btnTabsAddNew.setOnClickListener {
+            addNewTab(DEFAULT_HOME_URL)
+        }
+
+        btnTabsCloseAll.setOnClickListener {
+            closeAllTabs()
+        }
+
+        btnTabsEmptyNew.setOnClickListener {
+            addNewTab(DEFAULT_HOME_URL)
         }
 
         // Navigation toolbar actions
         btnWebBack.setOnClickListener {
-            if (webView.canGoBack()) {
-                webView.goBack()
+            if (isTabSwitcherOpen) {
+                closeTabSwitcher()
+                return@setOnClickListener
+            }
+            val wv = activeTab?.webView
+            if (wv?.canGoBack() == true) {
+                wv.goBack()
             } else {
                 Toast.makeText(service, "No earlier page", Toast.LENGTH_SHORT).show()
             }
         }
 
         btnWebForward.setOnClickListener {
-            if (webView.canGoForward()) {
-                webView.goForward()
+            if (!isTabSwitcherOpen && activeTab?.webView?.canGoForward() == true) {
+                activeTab?.webView?.goForward()
             }
         }
 
         btnWebRefresh.setOnClickListener {
+            if (isTabSwitcherOpen) return@setOnClickListener
+            val wv = activeTab?.webView ?: return@setOnClickListener
             if (isLoading) {
-                webView.stopLoading()
+                wv.stopLoading()
             } else {
-                webView.reload()
+                wv.reload()
             }
         }
 
         btnWebHome.setOnClickListener {
+            if (isTabSwitcherOpen) {
+                closeTabSwitcher()
+            }
             loadSearchOrUrl(DEFAULT_HOME_URL)
         }
 
-        btnWebOpenExternal.setOnClickListener {
-            val currentUrl = webView.url ?: DEFAULT_HOME_URL
-            try {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(currentUrl)).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                service.startActivity(intent)
-                service.closeMenu()
-            } catch (e: Exception) {
-                Toast.makeText(service, "Cannot open external browser", Toast.LENGTH_SHORT).show()
+        // Tabs button: toggles between webview and tab grid view
+        btnWebTabs.setOnClickListener {
+            if (isTabSwitcherOpen) {
+                closeTabSwitcher()
+            } else {
+                openTabSwitcher()
             }
         }
     }
@@ -485,7 +856,6 @@ class BrowserManager(
         layoutBrowserBottomToolbar.visibility = View.GONE
         btnUnhide.visibility = View.VISIBLE
 
-        // Immediately ensure videos continue playing across the layout change
         injectMediaKeepAliveScript()
         resumeAllVideos()
     }
@@ -493,7 +863,9 @@ class BrowserManager(
     private fun showToolbars() {
         areBarsHidden = false
         layoutBrowserHeader.visibility = View.VISIBLE
-        layoutBrowserOmnibox.visibility = View.VISIBLE
+        if (!isTabSwitcherOpen) {
+            layoutBrowserOmnibox.visibility = View.VISIBLE
+        }
         layoutBrowserBottomToolbar.visibility = View.VISIBLE
         btnUnhide.visibility = View.GONE
 
@@ -502,6 +874,7 @@ class BrowserManager(
     }
 
     private fun resumeAllVideos() {
+        val wv = activeTab?.webView ?: return
         val js = """
             (function() {
                 var vids = document.getElementsByTagName('video');
@@ -512,7 +885,7 @@ class BrowserManager(
                 }
             })();
         """.trimIndent()
-        webView.evaluateJavascript(js, null)
+        wv.evaluateJavascript(js, null)
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -552,6 +925,7 @@ class BrowserManager(
     }
 
     fun loadSearchOrUrl(input: String) {
+        val current = activeTab ?: return
         val query = input.trim()
         val targetUrl = when {
             query.isEmpty() -> DEFAULT_HOME_URL
@@ -563,9 +937,11 @@ class BrowserManager(
             }
         }
 
+        current.lastFailedUrl = null
+        current.url = targetUrl
         layoutError.visibility = View.GONE
         edtUrl.setText(targetUrl)
-        webView.loadUrl(targetUrl)
+        current.webView.loadUrl(targetUrl)
     }
 
     fun openBrowser() {
@@ -573,14 +949,19 @@ class BrowserManager(
         applyAdaptiveDimensions()
         repositionBrowserWindow()
 
-        // Resume webview if paused
-        webView.onResume()
-        webView.resumeTimers()
-
-        if (webView.url.isNullOrEmpty()) {
-            loadSearchOrUrl(DEFAULT_HOME_URL)
+        if (tabsList.isEmpty()) {
+            addNewTab(DEFAULT_HOME_URL)
+        } else {
+            if (isTabSwitcherOpen) {
+                closeTabSwitcher()
+            }
+            activeTab?.webView?.onResume()
+            activeTab?.webView?.resumeTimers()
+            if (activeTab?.webView?.url.isNullOrEmpty()) {
+                loadSearchOrUrl(DEFAULT_HOME_URL)
+            }
+            updateNavigationButtonsState()
         }
-        updateNavigationButtonsState()
     }
 
     fun onConfigurationChanged() {
@@ -594,6 +975,10 @@ class BrowserManager(
         hideKeyboard()
         service.setMenuFocusable(false)
         showToolbars()
+
+        if (isTabSwitcherOpen) {
+            closeTabSwitcher()
+        }
 
         layoutBrowserContainer.visibility = View.GONE
         val menuButtons = menuView.findViewById<View>(R.id.layout_menu_buttons)
@@ -635,21 +1020,19 @@ class BrowserManager(
                 || displayMetrics.widthPixels > displayMetrics.heightPixels
 
         return if (isLandscape) {
-            // Landscape: Reduced width to avoid being "kinda long", optimal 16:9 ratio
+            // Landscape: Optimal ratio leaving ample screen space
             val maxAllowedH = (screenHeightDp - 48).coerceAtLeast(200)
             if (isExpanded) {
-                // Expanded landscape: ~400-440dp width
                 val targetW = (screenWidthDp * 0.50f).toInt().coerceIn(360, 440)
                 val targetH = (screenHeightDp - 32).coerceIn(240, (screenHeightDp - 24).coerceAtLeast(220))
                 WindowDimensions(targetW, targetH)
             } else {
-                // Compact landscape: ~320-350dp width (leaves ample screen space behind)
                 val targetW = (screenWidthDp * 0.38f).toInt().coerceIn(300, 350)
                 val targetH = (screenHeightDp * 0.72f).toInt().coerceIn(210, maxAllowedH)
                 WindowDimensions(targetW, targetH)
             }
         } else {
-            // Portrait: Screen width is narrower, but height is tall
+            // Portrait
             if (isExpanded) {
                 val targetW = (screenWidthDp - 16).coerceIn(310, 370)
                 val targetH = (screenHeightDp - 80).coerceIn(460, 620)
@@ -683,7 +1066,6 @@ class BrowserManager(
         val edgePadPx = (8 * density).toInt()
 
         val dims = getAdaptiveDimensions()
-        // Account for 12dp padding on all sides in floating_menu_layout.xml (24dp total)
         val totalWidthPx = ((dims.widthDp + 24) * density).toInt()
         val totalHeightPx = ((dims.heightDp + 24) * density).toInt()
 
@@ -694,18 +1076,14 @@ class BrowserManager(
         var targetY = service.menuParams.y
 
         if (isLandscape) {
-            // In landscape, center vertically so nothing is ever clipped by bottom or top
             val verticalSlack = (screenHeight - totalHeightPx).coerceAtLeast(0)
             targetY = (verticalSlack / 2).coerceIn(
                 edgePadPx,
                 (screenHeight - totalHeightPx - edgePadPx).coerceAtLeast(edgePadPx)
             )
-
-            // Keep X cleanly inside screen bounds
             val maxX = (screenWidth - totalWidthPx - edgePadPx).coerceAtLeast(edgePadPx)
             targetX = targetX.coerceIn(edgePadPx, maxX)
         } else {
-            // In portrait, keep safely within screen bounds
             val maxX = (screenWidth - totalWidthPx - edgePadPx).coerceAtLeast(edgePadPx)
             val maxY = (screenHeight - totalHeightPx - edgePadPx).coerceAtLeast(edgePadPx)
             targetX = targetX.coerceIn(edgePadPx, maxX)
@@ -751,8 +1129,9 @@ class BrowserManager(
     }
 
     private fun updateNavigationButtonsState() {
-        val canGoBack = webView.canGoBack()
-        val canGoForward = webView.canGoForward()
+        val wv = activeTab?.webView
+        val canGoBack = wv?.canGoBack() == true
+        val canGoForward = wv?.canGoForward() == true
 
         btnWebBack.alpha = if (canGoBack) 1.0f else 0.4f
         btnWebForward.alpha = if (canGoForward) 1.0f else 0.4f
@@ -770,11 +1149,20 @@ class BrowserManager(
 
     fun onDestroy() {
         try {
-            webView.stopLoading()
-            webView.loadUrl("about:blank")
-            webView.clearHistory()
-            (webView.parent as? ViewGroup)?.removeView(webView)
-            webView.destroy()
+            for (tab in tabsList) {
+                try {
+                    tab.webView.stopLoading()
+                    tab.webView.loadUrl("about:blank")
+                    tab.webView.clearHistory()
+                    (tab.webView.parent as? ViewGroup)?.removeView(tab.webView)
+                    tab.webView.destroy()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                tab.thumbnail?.recycle()
+                tab.thumbnail = null
+            }
+            tabsList.clear()
         } catch (e: Exception) {
             e.printStackTrace()
         }
