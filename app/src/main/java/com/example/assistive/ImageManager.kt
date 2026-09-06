@@ -224,6 +224,12 @@ class ImageManager(
         }
     }
 
+    fun resetSize() {
+        if (isExpanded) {
+            toggleSize()
+        }
+    }
+
     fun closeImagePanel() {
         if (isExpanded) {
             toggleSize()

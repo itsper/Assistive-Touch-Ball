@@ -40,6 +40,18 @@
                 android:textSize="11sp"
                 android:textStyle="bold"
                 android:layout_centerInParent="true" />
+
+            <ImageButton
+                android:id="@+id/btn_video_size"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_fullscreen"
+                android:tint="#FFFFFF"
+                android:background="@drawable/btn_item_bg"
+                android:layout_alignParentEnd="true"
+                android:layout_centerVertical="true"
+                android:padding="4dp"
+                android:contentDescription="Resize" />
         </RelativeLayout>
 
         <!-- TextureView Video Rendering Container -->
@@ -184,6 +196,18 @@
                 android:textSize="11sp"
                 android:textStyle="bold"
                 android:layout_centerInParent="true" />
+
+            <ImageButton
+                android:id="@+id/btn_video_playlist_size"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_fullscreen"
+                android:tint="#FFFFFF"
+                android:background="@drawable/btn_item_bg"
+                android:layout_alignParentEnd="true"
+                android:layout_centerVertical="true"
+                android:padding="4dp"
+                android:contentDescription="Resize" />
         </RelativeLayout>
 
         <!-- Recycler view for folders & videos -->

@@ -537,6 +537,8 @@ class FloatingBallService : AccessibilityService() {
     internal fun showMenu() {
         // Reset visibilities when menu is displayed
         setMenuFocusable(false)
+        videoManager.resetSize()
+        imageManager.resetSize()
         menuView.findViewById<View>(R.id.layout_menu_buttons).visibility = View.VISIBLE
         menuView.findViewById<View>(R.id.layout_music_container).visibility = View.GONE
         menuView.findViewById<View>(R.id.layout_video_container).visibility = View.GONE

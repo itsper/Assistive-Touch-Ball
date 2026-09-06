@@ -4,6 +4,7 @@ import android.content.Context
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.SeekBar
 import android.widget.TextView
@@ -33,11 +34,14 @@ class VideoManager(
     private var activeVideoViewHolder: VideoViewHolder? = null
     private var videoProgressJob: Job? = null
     private var isUserTrackingVideoSeekBar = false
+    private var isExpanded = false
+    private lateinit var layoutVideoContainer: FrameLayout
 
     fun init() {
         initVideoPlayer()
         scanLocalVideos()
-        val videoViewHolder = VideoViewHolder(menuView.findViewById(R.id.layout_video_container))
+        layoutVideoContainer = menuView.findViewById(R.id.layout_video_container)
+        val videoViewHolder = VideoViewHolder(layoutVideoContainer)
         setupVideoPage(videoViewHolder)
     }
 
@@ -208,9 +212,18 @@ class VideoManager(
         holder.layoutPlaylist.visibility = View.GONE
 
         holder.btnVideoPlayerBack.setOnClickListener {
+            resetSize()
             menuView.findViewById<View>(R.id.layout_menu_buttons).visibility = View.VISIBLE
             menuView.findViewById<View>(R.id.layout_music_container).visibility = View.GONE
             menuView.findViewById<View>(R.id.layout_video_container).visibility = View.GONE
+        }
+
+        holder.btnVideoSize.setOnClickListener {
+            toggleSize()
+        }
+
+        holder.btnVideoPlaylistSize.setOnClickListener {
+            toggleSize()
         }
 
         holder.playerView.player = videoPlayer
@@ -312,6 +325,42 @@ class VideoManager(
         }
     }
 
+    fun resetSize() {
+        if (isExpanded) {
+            toggleSize()
+        }
+    }
+
+    private fun toggleSize() {
+        isExpanded = !isExpanded
+        val holder = activeVideoViewHolder
+        val density = service.resources.displayMetrics.density
+        val targetWidthDp = if (isExpanded) 310 else 200
+        val targetHeightDp = if (isExpanded) 390 else 234
+
+        val widthPx = (targetWidthDp * density).toInt()
+        val heightPx = (targetHeightDp * density).toInt()
+
+        layoutVideoContainer.layoutParams = FrameLayout.LayoutParams(widthPx, heightPx)
+
+        holder?.let {
+            val playerParams = it.playerView.layoutParams
+            playerParams.height = ((if (isExpanded) 220 else 95) * density).toInt()
+            it.playerView.layoutParams = playerParams
+            it.playerView.requestLayout()
+
+            val iconRes = if (isExpanded) R.drawable.ic_fullscreen_exit else R.drawable.ic_fullscreen
+            it.btnVideoSize.setImageResource(iconRes)
+            it.btnVideoPlaylistSize.setImageResource(iconRes)
+        }
+
+        try {
+            service.windowManager.updateViewLayout(service.menuView, service.menuParams)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     fun onDestroy() {
         stopVideoProgressUpdates()
         videoPlayer?.release()
@@ -322,6 +371,7 @@ class VideoManager(
 class VideoViewHolder(view: View) : RecyclerView.ViewHolder(view) {
     val layoutPlayer: View = view.findViewById(R.id.layout_video_player)
     val btnVideoPlayerBack: ImageButton = view.findViewById(R.id.btn_video_player_back)
+    val btnVideoSize: ImageButton = view.findViewById(R.id.btn_video_size)
     val playerView: PlayerView = view.findViewById(R.id.video_player_view)
     val txtVideoTitle: TextView = view.findViewById(R.id.txt_video_title)
     val playerSeekBar: SeekBar = view.findViewById(R.id.video_seekbar)
@@ -333,6 +383,7 @@ class VideoViewHolder(view: View) : RecyclerView.ViewHolder(view) {
 
     val layoutPlaylist: View = view.findViewById(R.id.layout_video_playlist)
     val btnPlaylistBack: ImageButton = view.findViewById(R.id.btn_video_playlist_back)
+    val btnVideoPlaylistSize: ImageButton = view.findViewById(R.id.btn_video_playlist_size)
     val playlistRecycler: RecyclerView = view.findViewById(R.id.video_playlist_recycler)
     val txtEmptyPlaylist: View = view.findViewById(R.id.txt_empty_video_playlist)
 }
