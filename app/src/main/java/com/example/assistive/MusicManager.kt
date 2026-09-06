@@ -194,8 +194,10 @@ class MusicManager(
         }
 
         if (p.shuffleModeEnabled) {
-            holder.btnShuffle.setColorFilter(Color.parseColor("#FFFFFF"))
+            holder.btnShuffle.setBackgroundResource(R.drawable.btn_item_bg_active_blue)
+            holder.btnShuffle.setColorFilter(Color.parseColor("#4FC3F7"))
         } else {
+            holder.btnShuffle.setBackgroundResource(R.drawable.btn_item_bg)
             holder.btnShuffle.setColorFilter(Color.parseColor("#88FFFFFF"))
         }
 

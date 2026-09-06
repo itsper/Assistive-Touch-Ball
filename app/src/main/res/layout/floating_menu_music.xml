@@ -140,7 +140,7 @@
                 android:id="@+id/btn_shuffle"
                 android:layout_width="32dp"
                 android:layout_height="32dp"
-                android:src="@android:drawable/ic_menu_revert"
+                android:src="@drawable/ic_shuffle"
                 android:tint="#88FFFFFF"
                 android:background="@drawable/btn_item_bg"
                 android:contentDescription="Shuffle"
