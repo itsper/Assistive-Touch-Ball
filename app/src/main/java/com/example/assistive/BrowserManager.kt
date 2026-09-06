@@ -17,8 +17,10 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import android.content.pm.PackageManager
 import android.webkit.*
 import android.widget.*
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
@@ -202,8 +204,8 @@ class BrowserManager(
             builtInZoomControls = true
             displayZoomControls = false
             setSupportZoom(true)
-            allowFileAccess = false
-            allowContentAccess = false
+            allowFileAccess = true
+            allowContentAccess = true
 
             // Crucial for YouTube / Shorts video continuous playback without requiring user gesture
             mediaPlaybackRequiresUserGesture = false
@@ -389,6 +391,55 @@ class BrowserManager(
                 customViewCallback = null
                 wv.visibility = View.VISIBLE
             }
+
+            // File upload & Google Lens support
+            override fun onShowFileChooser(
+                webView: WebView?,
+                filePathCallback: ValueCallback<Array<Uri>>?,
+                fileChooserParams: FileChooserParams?
+            ): Boolean {
+                if (filePathCallback == null) return false
+                return openFileChooser(filePathCallback, fileChooserParams)
+            }
+
+            // HTML5 Camera / Microphone permissions (WebRTC / live camera)
+            override fun onPermissionRequest(request: PermissionRequest?) {
+                if (request == null) return
+                val resources = request.resources
+                var canGrant = true
+                if (resources.contains(PermissionRequest.RESOURCE_VIDEO_CAPTURE)) {
+                    val hasCamera = ContextCompat.checkSelfPermission(
+                        service,
+                        android.Manifest.permission.CAMERA
+                    ) == PackageManager.PERMISSION_GRANTED
+                    if (!hasCamera) canGrant = false
+                }
+                if (canGrant) {
+                    request.grant(resources)
+                } else {
+                    request.deny()
+                }
+            }
+        }
+    }
+
+    private fun openFileChooser(
+        callback: ValueCallback<Array<Uri>>,
+        params: WebChromeClient.FileChooserParams?
+    ): Boolean {
+        WebViewFileChooserActivity.cancelPendingCallback()
+        WebViewFileChooserActivity.currentCallback = callback
+        WebViewFileChooserActivity.currentParams = params
+        return try {
+            val intent = Intent(service, WebViewFileChooserActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+            service.startActivity(intent)
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            WebViewFileChooserActivity.cancelPendingCallback()
+            false
         }
     }
 
@@ -972,6 +1023,7 @@ class BrowserManager(
     }
 
     private fun closeBrowserPanel() {
+        WebViewFileChooserActivity.cancelPendingCallback()
         hideKeyboard()
         service.setMenuFocusable(false)
         showToolbars()

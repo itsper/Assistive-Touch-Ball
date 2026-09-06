@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="2dp">
+
+    <ImageView
+        android:id="@+id/img_grid_thumb"
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:scaleType="centerCrop"
+        android:background="#22FFFFFF"
+        android:contentDescription="Photo" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:background="?android:attr/selectableItemBackground" />
+</FrameLayout>

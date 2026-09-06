@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <com.example.assistive.ZoomableImageView
+        android:id="@+id/img_viewer_zoomable"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="Photo View" />
+
+    <ProgressBar
+        android:id="@+id/progress_viewer"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:layout_gravity="center"
+        android:indeterminateTint="#FFFFFFFF"
+        android:visibility="gone" />
+</FrameLayout>

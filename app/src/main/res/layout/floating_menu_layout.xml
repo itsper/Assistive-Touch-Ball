@@ -80,4 +80,12 @@
         android:visibility="gone">
         <include layout="@layout/floating_menu_browser" />
     </FrameLayout>
+
+    <FrameLayout
+        android:id="@+id/layout_image_container"
+        android:layout_width="200dp"
+        android:layout_height="234dp"
+        android:visibility="gone">
+        <include layout="@layout/floating_menu_image" />
+    </FrameLayout>
 </FrameLayout>
